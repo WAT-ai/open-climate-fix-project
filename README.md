@@ -2,6 +2,14 @@
 
 This is the code base for the 2022/23 Open Climate Fix project.
 
+# Set up
+This set up guide assumes you have Python installed, and you know basic cmd/terminal commands.
+
+It is recommended to create a Python environment specifically for this project to minimize clutter.
+To install all necessary libraries, navigate to the `infra/` directory and run:
+ ```pip install -r requirements.txt```
+ Note that you must have pip installed before hand.
+
 ## utils/
 Scripts for miscellaneous tasks can be stored in the utils directory.
 The `unzip.py` file can unzip all files within a directory and save them to any other directory. This script is useful since most of the data that OCF provides will be zipped.
