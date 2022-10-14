@@ -1,5 +1,3 @@
-zarr
-cartopy
 torch
 xarray
 zarr
@@ -23,3 +21,4 @@ bottleneck
 pyproj
 pyresample
 fastparquet
+cartopy
