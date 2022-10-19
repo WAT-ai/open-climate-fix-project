@@ -11,8 +11,9 @@ The dependencies for this project are a little finicky. Results can differ depen
 **Please make sure you are not Anaconda version 4.14.X**. Although this is the latest version (at the time of writing this), its been known to cause issues while installing packages that require SSL verification. Any version of Anaconda besides this should be fine, but I (Areel) used Anaconda 4.12.
 ## Steps
 Here are the steps to install the dependencies:
-1. Run `conda env create -f environment.yml`. This will create an environment in you local called `watai` with python version 3.10.4. It will install dependencies into the `watai` env.
-2. Run `pip install -r requirements.txt`. This will install remaining dependencies.
+1. Pull this repository to your local.
+2. Run `conda env create -f environment.yml`. This will create an environment in your local called `watai` with python version 3.10.4. It will install dependencies into the `watai` env.
+3. Run `pip install -r requirements.txt`. This will install remaining dependencies.
 
 #### Pip and Conda?
 In general it is a bad idea to install packages using both Pip and Conda. The packages may not respect each others dependencies and versions, causing issues down the road. However, there are special cases (like this one), where both Pip and Conda need to be used. There are some packages that are too complex to be installed using just Pip, a package manager like Conda is needed. On the other hand, there are some packages that are not support by Conda. Hence, we use both. 
