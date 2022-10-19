@@ -1,19 +1,24 @@
+
 # open-climate-fix-project
 
 This is the code base for the 2022/23 Open Climate Fix project.
 
 # Set up
-This set up guide assumes you have Python and Ananconda installed, and you know basic command prompt or terminal commands.
+This set up guide assumes you have Python and Anaconda installed, and you know basic cmd/terminal commands.
 
-### Development Environment
-It is recommended to create a Python environment specifically for this project to minimize clutter. You can create a conda Python environment using the following command (assumes you have conda installed):
-`conda create -n watai`. This will create an environment in you local machine called `watai`. In this environment you can install python and other libraries specific to this project. Although technically you can use any environment name you want (by replacing `watai` with something else in the command earlier) it is recommended you use `watai` as your env name, so that all developers on the team can share commands and setup scripts. Once the environment is created, run `conda activate watai` to activate the environment.
-You can create environments without conda, by running `python -m venv watai`, but it is strongly recommended to use conda, since there are many package we will use down the road which are too complicated to install without conda (like Cartopy, geopandas, and others).
+The dependencies for this project are a little finicky. Results can differ depending on your machine and operating system, so be ready to troubleshoot installation errors.
 
+**Please make sure you are not Anaconda version 4.14.X**. Although this is the latest version (at the time of writing this), its been known to cause issues while installing packages that require SSL verification. Any version of Anaconda besides this should be fine, but I (Areel) used Anaconda 4.12.
+## Steps
+Here are the steps to install the dependencies:
+1- Run `conda env create -f environment.yml`. This will create an environment in you local called `watai` with python version 3.10.4. It will install dependencies into the `watai` env.
+2- Run `pip install -r requirements.txt`. This will install remaining dependencies.
 
-
-## utils/
+#### Pip and Conda?
+In general it is a bad idea to install packages using both Pip and Conda. The packages may not respect each others dependencies and versions, causing issues down the road. However, there are special cases (like this one), where both Pip and Conda need to be used. There are some packages that are too complex to be installed using just Pip, a package manager like Conda is needed. On the other hand, there are some packages that are not support by Conda. Hence, we use both. 
+# utils/
 Scripts for miscellaneous tasks can be stored in the utils directory.
+## utils/unzip.py
 The `unzip.py` file can unzip all files within a directory and save them to any other directory. This script is useful since most of the data that OCF provides will be zipped.
 To use the `unzip.py` script:
 1. Change the `INPUT_DIR` variable in `unzip.py` to the **absolute path** of the directory containing all the zip files you want to extract
@@ -23,4 +28,4 @@ To use the `unzip.py` script:
 5. Run the command: `python unzip.py`
 
 ## Note on version control for data
-Make sure not to add changes to data files to your commits. GitHub will not allow you to push changes to a file that is larger than ~50 MB, we cannot version our data using GitHub. To make things easier, create a directory called `data/` in your working directory and store all your data there. GitHub will not track any files in the `data/` directory (since the `data/` directory is in the .gitignore file)
+Make sure not to add changes to data files to your commits. GitHub will not allow you to push changes to a file that is larger than ~50 MB, we cannot version our data using GitHub. To make things easier, create a folder called `data/` in your working directory and store all your data there. GitHub will not track any files in the `data/` directory (since the `data/` directory is in the .gitignore file)
