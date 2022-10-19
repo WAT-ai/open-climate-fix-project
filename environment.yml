@@ -1,0 +1,10 @@
+name: watai
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10.4
+  - pip
+  - xarray
+  - cartopy
+  - matplotlib
+  - scikit-learn
