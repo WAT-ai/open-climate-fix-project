@@ -16,10 +16,18 @@ Here are the steps to install the dependencies:
 3. Run `pip install -r requirements.txt`. This will install remaining dependencies.
 
 #### Pip and Conda?
-In general it is a bad idea to install packages using both Pip and Conda. The packages may not respect each others dependencies and versions, causing issues down the road. However, there are special cases (like this one), where both Pip and Conda need to be used. There are some packages that are too complex to be installed using just Pip, a package manager like Conda is needed. On the other hand, there are some packages that are not support by Conda. Hence, we use both. 
+In general it is a bad idea to install packages using both Pip and Conda. The packages may not respect each others dependencies and versions, causing issues down the road. However, there are special cases (like this one), where both Pip and Conda need to be used. There are some packages that are too complex to be installed using just Pip, a package manager like Conda is needed. On the other hand, there are some packages that are not support by Conda. Hence, we use both.
+
+# eda/
+The `eda/` directory contains all our exploratory data analysis (EDA) work.
+#### eda/satellite.ipynb
+This notebook contains the EDA for the satellite data.
+#### eda/nwp.ipynb
+This notebook contains the EDA for the nwp data.
+
 # utils/
 Scripts for miscellaneous tasks can be stored in the utils directory.
-## utils/unzip.py
+#### utils/unzip.py
 The `unzip.py` file can unzip all files within a directory and save them to any other directory. This script is useful since most of the data that OCF provides will be zipped.
 To use the `unzip.py` script:
 1. Change the `INPUT_DIR` variable in `unzip.py` to the **absolute path** of the directory containing all the zip files you want to extract
