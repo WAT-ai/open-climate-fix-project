@@ -13,7 +13,8 @@ The dependencies for this project are a little finicky. Results can differ depen
 Here are the steps to install the dependencies:
 1. Pull this repository to your local.
 2. Run `conda env create -f environment.yml`. This will create an environment in your local called `watai` with python version 3.10.4. It will install dependencies into the `watai` env.
-3. Run `pip install -r requirements.txt`. This will install remaining dependencies.
+3. Activate the newly created `watai` environment.
+4. Run `pip install -r requirements.txt`. This will install remaining dependencies.
 
 #### Pip and Conda?
 In general it is a bad idea to install packages using both Pip and Conda. The packages may not respect each others dependencies and versions, causing issues down the road. However, there are special cases (like this one), where both Pip and Conda need to be used. There are some packages that are too complex to be installed using just Pip, a package manager like Conda is needed. On the other hand, there are some packages that are not support by Conda. Hence, we use both.
