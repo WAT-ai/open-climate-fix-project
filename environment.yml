@@ -1,7 +1,6 @@
 name: watai
 channels:
   - conda-forge
-  - anaconda
 dependencies:
   - python=3.10.4
   - pip
@@ -11,4 +10,3 @@ dependencies:
   - scikit-learn
   - zarr
   - dask
-  - wget
