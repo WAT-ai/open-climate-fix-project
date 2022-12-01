@@ -9,12 +9,12 @@ SATELLITE_DATA_LINK = 'https://huggingface.co/datasets/openclimatefix/eumetsat-r
 
 def download_data(files, link, year, file_count, output_dir):
     total = len(files)
-    for i, file in enumerate(files[-2:]):
+    for i, file in enumerate(files):
         file_name = f'{year}_0000{file}-of-0000{file_count}.zarr.zip'
         url = f'{link}/{year}/hrv/{file_name}'
         print(f'\n({i + 1}/{total}) - Downloading {file_name}\n')
-        wget.download(url, output_dir + file_name)
-    print(f"Download for {year} Complete")
+        wget.download(url, output_dir + '/' + file_name)
+    print(f"\nDownload for {year} Complete")
 
 if __name__ == "__main__":
     output_dir = sys.argv[1]
