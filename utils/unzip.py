@@ -1,8 +1,8 @@
 import zipfile
 import os
 
-INPUT_DIR = 'Replace with absolute path of the directory containing zipped files'
-OUTPUT_DIR = 'Replace with absolute path of the directory to save extracted zip files in'
+INPUT_DIR = '../data'
+OUTPUT_DIR = '../data'
 
 if __name__ == '__main__':
     dir_list = os.listdir(INPUT_DIR)
