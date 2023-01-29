@@ -10,22 +10,28 @@ def read_files(path: str):
     if not os.path.exists(path):
         raise FileNotFoundError('file path does not exist')
 
-    file_info = {}
+    file_info = ['', None, None]
 
     for file in os.listdir(path):
 
         if file.endswith('.hdf'):
-            file_info['hdf_path'] = path + '/' + file
+            file_info[0] = path + '/' + file
 
         elif file.endswith('.csv'):
             if 'metadata' in file:
-                file_info['metadata'] = pd.read_csv(path + '/' + file)
+                file_info[1] = pd.read_csv(path + '/' + file, index_col=1)
             else:
-                file_info['pv_systems'] = pd.read_csv(path + '/' + file)
+                file_info[2] = pd.read_csv(path + '/' + file, index_col=0)
 
     return file_info
 
-def read_hdf(hdf_path, key):
+
+def open_hdf(path, key):
+    """
+    :param path:
+    :param key:
+    :return:
+    """
 
     # with pd.HDFStore(hdf_path) as hdf:
     #     keys = hdf.keys()
@@ -33,15 +39,17 @@ def read_hdf(hdf_path, key):
     # for counter, key in enumerate(keys):
     #     logging.info(f"Reading {key}: {counter} out of {len(keys)}")
 
-        # if counter == 0:
-    df = pd.read_hdf(hdf_path, key)
-    df = df.resample("5T").mean()
+    # if counter == 0:
+    return pd.read_hdf(path, key)
+
     print(df.head())
     print(df.tail())
 
 
 def process_pv_data():
     """ some preprocessing"""
+
+    df = df.resample("5T").mean()
     # if len(df) > 288 * 10:  # more than 10 days of data
     #
     #     print(len(df))
