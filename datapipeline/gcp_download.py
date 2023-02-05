@@ -18,7 +18,7 @@ import xarray as xr
 
 
 class GCPPipeline:
-    def __init__(self) -> None:
+    def __init__(self, config) -> None:
         self.config = config
 
     def unzip(source: str, dest: str) -> None:
