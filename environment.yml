@@ -11,3 +11,4 @@ dependencies:
   - zarr
   - dask
   - huggingface_hub
+  - cupy
