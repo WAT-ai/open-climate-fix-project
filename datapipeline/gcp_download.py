@@ -47,9 +47,9 @@ class GCPPipeline:
         """
         pass
 
-    def cleanup(file: str) -> None:
+    def cleanup(filepath: str) -> None:
         """
-        Deletes the all contents of file
+        Deletes all the contents in the directory at filepath
         """
         pass
 
