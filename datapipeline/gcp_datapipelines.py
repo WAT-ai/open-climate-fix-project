@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 class GCPPipeline:
     def __init__(self, config: str) -> None:
         """
-            Intialization function for pipeline. Expects a path to JSON configuration file.
+        Intialization function for pipeline. Expects a path to JSON configuration file.
         """
         self.config = json.load(open(config))
 
@@ -97,23 +97,24 @@ class NWPPipeline(GCPPipeline):
 
     def download(self, filename: str) -> str:
         """
-            Downloads data from "file_name" location from HugginFace and 
-            returns the location of the downloaded data. If a filename is not found,
-            it logs the error in a log file
+        Downloads data from "filename" location from HugginFace and 
+        returns the location of the downloaded data. If a filename is not found,
+        it logs the error in a log file.
 
-            Args:
-                file_name: HuggingFace data location
-            
-            Returns:
-                returns downloaded location of the data
+        Args:
+            file_name: HuggingFace data location
+        
+        Returns:
+            returns filepath of downloaded data
         """
         print(f'\nDownloading: {filename}...')
         try:
             download_path = hf_hub_download(
-                repo_id=self.config['hf_repo_id'],
+                repo_id='openclimatefix/eumetsat-rss',
                 filename=filename,
                 repo_type=self.config['hf_repo_type'],
-                token=self.config['hf_token']
+                token=self.config['hf_token'],
+                cache_dir=getcwd()
             )
             return download_path
         except Exception as error:
@@ -124,36 +125,36 @@ class NWPPipeline(GCPPipeline):
         
     def preprocess(self) -> None:
         """
-            Preprocesses the data as desired
-            This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
+        Preprocesses the data as according to configuration parameters
         """
         pass
 
-    def format_date(self, date_str) -> tuple[date, date]:
+    def format_date(self, date_str) -> date:
         """
-            Takes a date in mm-dd-yyyy format and returns a date object
+        Takes a date in mm-dd-yyyy format and returns a date object
+
+        Args:
+            date_str: data in mm-dd-yyyy string format
+        
+        Return
+            a date object
         """
         return datetime.strptime(date_str, '%m-%d-%Y').date()
 
     def execute(self: str) -> None:
         """
-            Runs the NWP pipeline according to the configuration file
-
-            Args:
-                None
-            
-            Returns:
-                None
+        Runs the NWP pipeline according to the configuration file
         """
         assert self.config['data_type'] == 'nwp', 'Configuration Error: Expects "nwp" data_type in configuration'
 
-        START_DATE, END_DATE = self.format_date(self.config['start_date']), self.format_date(self.config['end_date'])
+        START_DATE = self.format_date(self.config['start_date'])
+        END_DATE = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
 
-        TEMPLATE_PATH = f"data/surfac/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
+        TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
         
         cur_date = START_DATE
-        while cur_date <= END_DATE:
+        while cur_date <= START_DATE + timedelta(days=1):
 
             # get file path
             filename = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
@@ -161,9 +162,10 @@ class NWPPipeline(GCPPipeline):
                                     .replace('DATE', str(cur_date.strftime("%Y%m%d")))
 
             # download file
-            self.download(filename)
-
+            file_path = self.download('data/2022/hrv/2022_000000-of-000056.zarr.zip')
+            
             # unzip
+            
             # preprocess
             # upload
             # clean up
