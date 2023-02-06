@@ -125,12 +125,8 @@ class NWPPipeline(GCPPipeline):
             Returns:
                 None
         """
-        START_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
-        END_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
-        FEATURES = []
-        INTERVAL = relativedelta(days=1)
+        assert config.data_type=='nwp', 'Data Type Error: Expects nwp data configuration'
 
-        date = START_DATE
         filename = f"data/{'YEAR'}/hrv/{'YEAR'}_000000-of-000056.zarr.zip"
 
         while date <= END_DATE:

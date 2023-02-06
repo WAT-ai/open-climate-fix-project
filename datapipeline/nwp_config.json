@@ -1,0 +1,13 @@
+
+{
+    "data_type":"nwp",
+    "year":2022,
+    "hf_repo_id":"openclimatefix/eumetsat-rss",
+    "hf_repo_type":"dataset",
+    "hf_token":"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",
+    "start_date":"01/01/2022",
+    "end_date":"30/01/2022",
+    "interval":1,
+    "features":[]
+}
+
