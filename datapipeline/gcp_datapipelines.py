@@ -1,4 +1,5 @@
 import json
+import zipfile
 from os import getcwd
 import matplotlib.pyplot as plt
 import xarray as xr
@@ -20,7 +21,7 @@ class GCPPipeline:
         """
         self.config = json.load(open(config))
 
-    def unzip(source: str, dest: str) -> None:
+    def unzip(self, source: str, dest: str) -> None:
         """
         Unzips all files from the source dir and extracts them to the dest dir
 
@@ -31,7 +32,8 @@ class GCPPipeline:
         Returns:
             None
         """
-        pass
+        with zipfile.ZipFile(source, 'r') as zip_ref:
+            zip_ref.extractall(dest)
 
     def gcp_upload(source: str, dest: str) -> None:
         """
@@ -114,7 +116,7 @@ class NWPPipeline(GCPPipeline):
                 filename=filename,
                 repo_type=self.config['hf_repo_type'],
                 token=self.config['hf_token'],
-                cache_dir=getcwd()
+                cache_dir=getcwd()+'/cache'
             )
             return download_path
         except Exception as error:
@@ -123,9 +125,12 @@ class NWPPipeline(GCPPipeline):
             print(error)
 
         
-    def preprocess(self) -> None:
+    def preprocess(self, filepath) -> None:
         """
-        Preprocesses the data as according to configuration parameters
+        Preprocesses the zarr file at filepath according to configuration parameters
+
+        Args:
+            filepath: location of zarr path
         """
         pass
 
@@ -157,16 +162,19 @@ class NWPPipeline(GCPPipeline):
         while cur_date <= START_DATE + timedelta(days=1):
 
             # get file path
-            filename = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
+            huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                                     .replace('MONTH', str(cur_date.month).zfill(2)) \
                                     .replace('DATE', str(cur_date.strftime("%Y%m%d")))
 
             # download file
-            file_path = self.download('data/2022/hrv/2022_000000-of-000056.zarr.zip')
-            
+            download_path = self.download(huggingface_path)
+
             # unzip
-            
+            unzipped_path = 'unzipped/' + download_path[-30:-4]
+            self.unzip(download_path, unzipped_path)
+
             # preprocess
+
             # upload
             # clean up
 
