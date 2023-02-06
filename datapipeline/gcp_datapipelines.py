@@ -1,13 +1,9 @@
 import json
-
 from os import getcwd
-
-from datetime import datetime
-from dateutil.relativedelta import *
-
 import matplotlib.pyplot as plt
-from huggingface_hub import hf_hub_download
 import xarray as xr
+from huggingface_hub import hf_hub_download
+from datetime import date, datetime, timedelta
 
 # For each chunk
 # 1. Download from HuggingFace
@@ -18,8 +14,11 @@ import xarray as xr
 
 
 class GCPPipeline:
-    def __init__(self, config) -> None:
-        self.config = config
+    def __init__(self, config: str) -> None:
+        """
+            Intialization function for pipeline. Expects a path to JSON configuration file.
+        """
+        self.config = json.load(open(config))
 
     def unzip(source: str, dest: str) -> None:
         """
@@ -96,9 +95,11 @@ class NWPPipeline(GCPPipeline):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
 
-    def download(self, file_name: str) -> str:
+    def download(self, filename: str) -> str:
         """
-            Downloads data from "file_name" location from HugginFace and returns the location of the downloaded data
+            Downloads data from "file_name" location from HugginFace and 
+            returns the location of the downloaded data. If a filename is not found,
+            it logs the error in a log file
 
             Args:
                 file_name: HuggingFace data location
@@ -106,18 +107,37 @@ class NWPPipeline(GCPPipeline):
             Returns:
                 returns downloaded location of the data
         """
-        
+        print(f'\nDownloading: {filename}...')
+        try:
+            download_path = hf_hub_download(
+                repo_id=self.config['hf_repo_id'],
+                filename=filename,
+                repo_type=self.config['hf_repo_type'],
+                token=self.config['hf_token']
+            )
+            return download_path
+        except Exception as error:
+            log_file = open(self.config['error_log_path'] + 'error_logs.txt', 'a')
+            log_file.write(str(error))
+            print(error)
 
-    def preprocess(self: str) -> None:
+        
+    def preprocess(self) -> None:
         """
             Preprocesses the data as desired
             This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
         """
         pass
 
+    def format_date(self, date_str) -> tuple[date, date]:
+        """
+            Takes a date in mm-dd-yyyy format and returns a date object
+        """
+        return datetime.strptime(date_str, '%m-%d-%Y').date()
+
     def execute(self: str) -> None:
         """
-            Runs the pipeline according to the configuration file
+            Runs the NWP pipeline according to the configuration file
 
             Args:
                 None
@@ -125,51 +145,35 @@ class NWPPipeline(GCPPipeline):
             Returns:
                 None
         """
-        assert config.data_type=='nwp', 'Data Type Error: Expects nwp data configuration'
+        assert self.config['data_type'] == 'nwp', 'Configuration Error: Expects "nwp" data_type in configuration'
 
-        filename = f"data/{'YEAR'}/hrv/{'YEAR'}_000000-of-000056.zarr.zip"
+        START_DATE, END_DATE = self.format_date(self.config['start_date']), self.format_date(self.config['end_date'])
+        assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
 
-        while date <= END_DATE:
-            # 1. Download Data
-            partition = filename.replace('YEAR', str(date.year)) \
-                                .replace('MONTH', str(date.month).zfill(2)) \
-                                .replace('DAY', str(date.day).zfill(2))
-            print(f"Downloading {partition}...")
+        TEMPLATE_PATH = f"data/surfac/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
+        
+        cur_date = START_DATE
+        while cur_date <= END_DATE:
 
-            path = hf_hub_download(
-                repo_id="openclimatefix/eumetsat-rss",
-                filename=partition,
-                repo_type="dataset",
-                token='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'
-            )
+            # get file path
+            filename = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
+                                    .replace('MONTH', str(cur_date.month).zfill(2)) \
+                                    .replace('DATE', str(cur_date.strftime("%Y%m%d")))
 
-            # 2. Unzip Data
-            data_path = f"./gcp-data/{partition[-30:-4]}"
-            print(f"Unzipping to {data_path}")
-            # with zipfile.ZipFile(path, "r") as zip_ref:
-            #     zip_ref.extractall(data_path)
+            # download file
+            self.download(filename)
 
-            # 3. Preprocess data
-            print("Preprocessing...")
-            dataset = xr.open_dataset(data_path, engine='zarr', chunks='auto')
+            # unzip
+            # preprocess
+            # upload
+            # clean up
 
-            time_slice = dataset.indexes['time'][0]
-            fig = plt.figure()
-            im = plt.imshow(dataset["data"].sel(time=time_slice))
+            # increment date
+            cur_date += timedelta(days=1)
 
-            date += INTERVAL
-            print(date)
-            break
-
-        print("Done")
-        self.download()
-        self.unzip()
-        self.prepocess()
-        self.gcp_upload()
-        self.cleanup()
 
 if __name__ == '__main__':
-    config = json.load(open('datapipeline_config.json'))
-    datapipeline = NWPPipeline(config=config)
+    config_path = 'nwp_config.json'
+    datapipeline = NWPPipeline(config=config_path)
     datapipeline.execute()
 
