@@ -54,7 +54,7 @@ class GCPPipeline:
         pass
 
 
-class SatelliteUpload(GCPPipeline):
+class SatellitePipeline(GCPPipeline):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
 
@@ -92,13 +92,13 @@ class SatelliteUpload(GCPPipeline):
         self.cleanup()
 
 
-class NWPUpload(GCPPipeline):
+class NWPPipeline(GCPPipeline):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
 
     def download(self, file_name: str) -> str:
         """
-            Downloads data from "file_name" location from HugginFace.
+            Downloads data from "file_name" location from HugginFace and returns the location of the downloaded data
 
             Args:
                 file_name: HuggingFace data location
@@ -110,14 +110,20 @@ class NWPUpload(GCPPipeline):
 
     def preprocess(self: str) -> None:
         """
-        Preprocesses the data as desired
-        This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
+            Preprocesses the data as desired
+            This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
         """
         pass
 
     def execute(self: str) -> None:
         """
             Runs the pipeline according to the configuration file
+
+            Args:
+                None
+            
+            Returns:
+                None
         """
         START_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
         END_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
@@ -134,10 +140,12 @@ class NWPUpload(GCPPipeline):
                                 .replace('DAY', str(date.day).zfill(2))
             print(f"Downloading {partition}...")
 
-            path = hf_hub_download(repo_id="openclimatefix/eumetsat-rss",
-                                    filename=partition,
-                                    repo_type="dataset",
-                                    token='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')
+            path = hf_hub_download(
+                repo_id="openclimatefix/eumetsat-rss",
+                filename=partition,
+                repo_type="dataset",
+                token='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'
+            )
 
             # 2. Unzip Data
             data_path = f"./gcp-data/{partition[-30:-4]}"
@@ -166,6 +174,6 @@ class NWPUpload(GCPPipeline):
 
 if __name__ == '__main__':
     config = json.load(open('datapipeline_config.json'))
-    datapipeline = SatelliteUpload(config=config)
+    datapipeline = NWPPipeline(config=config)
     datapipeline.execute()
 
