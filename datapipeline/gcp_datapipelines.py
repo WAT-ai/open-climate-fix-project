@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 from huggingface_hub import hf_hub_download
 import xarray as xr
 
-# PROCESS
+# For each chunk
 # 1. Download from HuggingFace
 # 2. Unzip data
 # 3. Preprocess
-# 4. Upload
+# 4. Upload to GCP
 # 5. Clean up
 
 
@@ -61,7 +61,7 @@ class SatelliteUpload(GCPPipeline):
     def download(self) -> str:
         print("Downloading Data")
         try:
-            for chunk in range(11, self.config['chunk_count'] + 1):
+            for chunk in range(self.config['chunk_count'] + 1):
                 file = f"data/{self.config['year']}/hrv/{self.config['year']}_0000{str(chunk).zfill(2)}-of-0000{self.config['chunk_count']}.zarr.zip"
                 path = hf_hub_download(
                     repo_id=self.config['hf_repo_id'],
@@ -84,7 +84,7 @@ class SatelliteUpload(GCPPipeline):
         """
         pass
 
-    def execute(self: str) -> None:
+    def execute(self) -> None:
         self.download()
         self.unzip()
         self.prepocess()
@@ -96,7 +96,29 @@ class NWPUpload(GCPPipeline):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
 
-    def download(self) -> str:
+    def download(self, file_name: str) -> str:
+        """
+            Downloads data from "file_name" location from HugginFace.
+
+            Args:
+                file_name: HuggingFace data location
+            
+            Returns:
+                returns downloaded location of the data
+        """
+        
+
+    def preprocess(self: str) -> None:
+        """
+        Preprocesses the data as desired
+        This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
+        """
+        pass
+
+    def execute(self: str) -> None:
+        """
+            Runs the pipeline according to the configuration file
+        """
         START_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
         END_DATE = datetime.strptime("January 1, 2022", "%B %d, %Y")
         FEATURES = []
@@ -136,15 +158,6 @@ class NWPUpload(GCPPipeline):
             break
 
         print("Done")
-
-    def preprocess(self: str) -> None:
-        """
-        Preprocesses the data as desired
-        This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
-        """
-        pass
-
-    def execute(self: str) -> None:
         self.download()
         self.unzip()
         self.prepocess()
