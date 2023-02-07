@@ -131,7 +131,7 @@ class NWPPipeline(GCPPipeline):
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
         
         cur_date = START_DATE
-        while cur_date <= START_DATE:
+        while cur_date <= END_DATE:
 
             # download file
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
@@ -196,10 +196,11 @@ class SatellitePipeline(GCPPipeline):
         self.unzip()
         self.prepocess()
         self.gcp_upload()
-        self.cleanup()
+        self.teardown()
 
 
 if __name__ == '__main__':
     config_path = 'nwp_config.json'
     datapipeline = NWPPipeline(config=config_path)
-    datapipeline.execute()
+    #datapipeline.execute()
+    datapipeline.preprocess("A")
