@@ -8,5 +8,7 @@
     "end_date":"01-30-2022",
     "interval":1,
     "features":[],
-    "error_log_path":"./"
+    "error_log_path":"./",
+    "gcp_bucket":"ocf_base_data",
+    "gcp_dest_blob":""
 }
