@@ -54,7 +54,7 @@ class GCPPipeline:
         storage_client = storage.Client
         bucket = storage_client.bucket(self.config['gcp_bucket'])
         blob = bucket.blob(self.config['gcp_bucket'])
-        blob.uploead_from_filename(source)
+        blob.upload_from_filename(source)
 
     def teardown(self, filepath: str) -> None:
         """
