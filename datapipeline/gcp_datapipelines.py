@@ -4,7 +4,7 @@ import shutil
 import xarray as xr
 
 from os import getcwd
-#from google.cloud import storage
+from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
 
