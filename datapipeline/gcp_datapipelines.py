@@ -1,9 +1,10 @@
 import json
 import zipfile
+import shutil
 import xarray as xr
 
 from os import getcwd
-from google.cloud import storage
+#from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
 
@@ -62,7 +63,7 @@ class GCPPipeline:
         Args:
             filepath: location of directory to delete
         """
-        pass
+        shutil.rmtree(filepath)
 
 
 class NWPPipeline(GCPPipeline):
@@ -88,7 +89,7 @@ class NWPPipeline(GCPPipeline):
                 filename=filepath,
                 repo_type=self.config['hf_repo_type'],
                 token=self.config['hf_token'],
-                cache_dir=getcwd() + '/cache'
+                cache_dir=getcwd() + '/cache/downloaded'
             )
             return download_path
         except Exception as error:
@@ -130,12 +131,12 @@ class NWPPipeline(GCPPipeline):
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
         
         cur_date = START_DATE
-        while cur_date <= END_DATE:
+        while cur_date <= START_DATE:
 
             # download file
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
-                                    .replace('MONTH', str(cur_date.month).zfill(2)) \
-                                    .replace('DATE', str(cur_date.strftime("%Y%m%d")))
+                                            .replace('MONTH', str(cur_date.month).zfill(2)) \
+                                            .replace('DATE', str(cur_date.strftime("%Y%m%d")))
             download_path = self.download(huggingface_path)
 
             if type(download_path) != 'str':
@@ -144,9 +145,8 @@ class NWPPipeline(GCPPipeline):
                 continue
 
             # unzip file
-            unzipped_path = 'unzipped/' + download_path[-30:-4]
+            unzipped_path = 'cache/unzipped/' + download_path[-30:-4]
             self.unzip(download_path, unzipped_path)
-            self.teardown(download_path)
 
             # preprocess data
                 # read in the data using xr, apply crops etc etc and save to disk 
@@ -154,8 +154,8 @@ class NWPPipeline(GCPPipeline):
             self.preprocess(unzipped_path)
             
             # upload to GCP
-            self.gcp_upload("watai/datapipeline/nwp_config.json")
-            self.teardown(unzipped_path)
+            self.gcp_upload(unzipped_path)
+            self.teardown("cache")
 
             # increment date
             cur_date += timedelta(days=1)
