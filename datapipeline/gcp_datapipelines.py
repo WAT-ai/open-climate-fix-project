@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta
 # 2. Unzip data
 # 3. Preprocess
 # 4. Upload to GCP
-# 5. Clean up
 
 
 class GCPPipeline:
@@ -35,7 +34,7 @@ class GCPPipeline:
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
-    def gcp_upload(source: str, dest: str) -> None:
+    def gcp_upload(self, source: str, dest: str) -> None:
         """
         Upload data from the source dir to a GCP bucket at dest
 
@@ -48,9 +47,9 @@ class GCPPipeline:
         """
         pass
 
-    def cleanup(filepath: str) -> None:
+    def teardown(self, filepath: str) -> None:
         """
-        Deletes all the contents in the directory at filepath
+        Deletes the directory at filepath and all of its contents
         """
         pass
 
@@ -94,29 +93,30 @@ class SatellitePipeline(GCPPipeline):
 
 
 class NWPPipeline(GCPPipeline):
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: str) -> None:
         super().__init__(config)
 
-    def download(self, filename: str) -> str:
+
+    def download(self, filepath: str) -> str:
         """
-        Downloads data from "filename" location from HugginFace and 
-        returns the location of the downloaded data. If a filename is not found,
-        it logs the error in a log file.
+        Downloads data from "filepath" location from HugginFace and 
+        returns the location of the downloaded data. If the filepath 
+        is not found, it logs the error in a log file.
 
         Args:
-            file_name: HuggingFace data location
+            filepath: HuggingFace data location
         
         Returns:
             returns filepath of downloaded data
         """
-        print(f'\nDownloading: {filename}...')
+        print(f'\nDownloading: {filepath}...')
         try:
             download_path = hf_hub_download(
                 repo_id='openclimatefix/eumetsat-rss',
-                filename=filename,
+                filename=filepath,
                 repo_type=self.config['hf_repo_type'],
                 token=self.config['hf_token'],
-                cache_dir=getcwd()+'/cache'
+                cache_dir=getcwd() + '/cache'
             )
             return download_path
         except Exception as error:
@@ -125,7 +125,7 @@ class NWPPipeline(GCPPipeline):
             print(error)
 
         
-    def preprocess(self, filepath) -> None:
+    def preprocess(self, filepath: str) -> None:
         """
         Preprocesses the zarr file at filepath according to configuration parameters
 
@@ -134,7 +134,8 @@ class NWPPipeline(GCPPipeline):
         """
         pass
 
-    def format_date(self, date_str) -> date:
+
+    def format_date(self, date_str: str) -> date:
         """
         Takes a date in mm-dd-yyyy format and returns a date object
 
@@ -145,6 +146,7 @@ class NWPPipeline(GCPPipeline):
             a date object
         """
         return datetime.strptime(date_str, '%m-%d-%Y').date()
+
 
     def execute(self: str) -> None:
         """
@@ -159,24 +161,27 @@ class NWPPipeline(GCPPipeline):
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
         
         cur_date = START_DATE
-        while cur_date <= START_DATE + timedelta(days=1):
+        while cur_date <= END_DATE:
 
-            # get file path
+            # download file
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                                     .replace('MONTH', str(cur_date.month).zfill(2)) \
                                     .replace('DATE', str(cur_date.strftime("%Y%m%d")))
-
-            # download file
             download_path = self.download(huggingface_path)
 
-            # unzip
+            # unzip file
             unzipped_path = 'unzipped/' + download_path[-30:-4]
             self.unzip(download_path, unzipped_path)
+            self.teardown(download_path)
 
-            # preprocess
-
-            # upload
-            # clean up
+            # preprocess data
+                # read in the data using xr, apply crops etc etc and save to disk 
+                # in place of the original data and delete the xarray object in memory
+            self.preprocess(unzipped_path)
+            
+            # upload to GCP
+            self.gcp_upload(unzipped_path, self.config['gcp_bucket'] + '/' + unzipped_path[-30:-4])
+            self.teardown(unzipped_path)
 
             # increment date
             cur_date += timedelta(days=1)
