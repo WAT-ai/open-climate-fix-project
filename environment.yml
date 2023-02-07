@@ -12,3 +12,4 @@ dependencies:
   - dask
   - huggingface_hub
   - cupy
+  - google
