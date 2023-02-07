@@ -60,8 +60,6 @@ class GCPPipeline:
         pass
 
 
-
-
 class NWPPipeline(GCPPipeline):
     def __init__(self, config: str) -> None:
         super().__init__(config)
