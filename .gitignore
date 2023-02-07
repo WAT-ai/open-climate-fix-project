@@ -1,6 +1,7 @@
 ######################## CUSTOM IGNORES ########################
 data/
 error_logs.txt
+cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
