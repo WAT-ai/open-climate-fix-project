@@ -13,7 +13,8 @@ from datetime import date, datetime, timedelta
 # 2. Unzip data
 # 3. Preprocess
 # 4. Upload to GCP
-
+# abstract methods
+# hydra/gin + pydantic to read and validate configurations
 
 class GCPPipeline:
     def __init__(self, config: str) -> None:
@@ -85,7 +86,7 @@ class NWPPipeline(GCPPipeline):
         print(f'\nDownloading: {filepath}...')
         try:
             download_path = hf_hub_download(
-                repo_id='openclimatefix/eumetsat-rss',
+                repo_id=self.config['hf_repo_id'],
                 filename=filepath,
                 repo_type=self.config['hf_repo_type'],
                 token=self.config['hf_token'],
@@ -100,6 +101,10 @@ class NWPPipeline(GCPPipeline):
     def preprocess(self, filepath: str) -> None:
         """
         Preprocesses the zarr file at filepath according to configuration parameters
+
+        Selecting time slice (6 AM to 9 PM)
+        Dropping features
+        Selecting a region (longitudinal latitudinal coords)
 
         Args:
             filepath: location of zarr path
@@ -202,5 +207,4 @@ class SatellitePipeline(GCPPipeline):
 if __name__ == '__main__':
     config_path = 'nwp_config.json'
     datapipeline = NWPPipeline(config=config_path)
-    #datapipeline.execute()
-    datapipeline.preprocess("A")
+    datapipeline.execute()
