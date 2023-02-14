@@ -9,5 +9,11 @@
     "features":[],
     "error_log_path":"./",
     "gcp_bucket":"ocf_base_data",
-    "gcp_dest_blob":"nwp/"
+    "gcp_dest_blob":"nwp/",
+    "preprocess": {
+        "time_range": ["6", "21"],
+        "latitude": [-45, 0],
+        "longitude": [105, 160],
+        "features": ["cdir", "fdir", "uvb", "skt"]
+    }
 }

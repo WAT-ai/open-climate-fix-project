@@ -111,6 +111,20 @@ class NWPPipeline(GCPPipeline):
         Args:
             filepath: location of zarr path
         """
+        max_lat, min_lat = self.config['preprocess']['latitude']
+        min_lon, max_lon = self.config['preprocess']['longitude']
+        min_time, max_time = self.config['preprocess']['time_range']
+
+        dataset = xr.open_dataset(filepath, engine='zarr', chunks='auto')
+        dataset = dataset[self.config['preprocess']['features']]
+        dataset = dataset.sel(latitude=slice(min_lat, max_lat),
+                              longitude=slice(min_lon, max_lon),
+                              time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)]))
+
+        # overwrites zarr file with post-processed data
+        self.teardown(filepath)
+        dataset.to_zarr('./data/hi.zarr')
+
         pass
 
     def format_date(self, date_str: str) -> date:
@@ -197,6 +211,7 @@ class SatellitePipeline(GCPPipeline):
         Preprocesses the data as desired
         This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
         """
+
         pass
 
     def execute(self) -> None:
