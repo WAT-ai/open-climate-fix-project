@@ -9,5 +9,5 @@
     "features":[],
     "error_log_path":"./",
     "gcp_bucket":"ocf_base_data",
-    "gcp_dest_blob":""
+    "gcp_dest_blob":"nwp/"
 }

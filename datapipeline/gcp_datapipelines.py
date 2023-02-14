@@ -42,7 +42,7 @@ class GCPPipeline:
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
-    def gcp_upload(self, source: str) -> None:
+    def gcp_upload(self, source: str, blob_name: str) -> None:
         """
         Uploads source dir to the GCP bucket specified the configuration
 
@@ -52,10 +52,12 @@ class GCPPipeline:
         Returns:
             None
         """
-        storage_client = storage.Client
-        bucket = storage_client.bucket(self.config['gcp_bucket'])
-        blob = bucket.blob(self.config['gcp_bucket'])
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(blob_name)
+        blob = bucket.blob(blob_name)
         blob.upload_from_filename(source)
+        print(f"File {source} uploaded to {blob_name}.")
+        return None
 
     def teardown(self, filepath: str) -> None:
         """
@@ -159,7 +161,8 @@ class NWPPipeline(GCPPipeline):
             self.preprocess(unzipped_path)
             
             # upload to GCP
-            self.gcp_upload(unzipped_path)
+            blob_file_name = huggingface_path[5:-4]
+            self.gcp_upload(unzipped_path, self.config['gcp_dest_blob'] + blob_file_name)
             self.teardown("cache")
 
             # increment date
