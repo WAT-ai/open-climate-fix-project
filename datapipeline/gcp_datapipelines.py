@@ -125,8 +125,6 @@ class NWPPipeline(GCPPipeline):
         self.teardown(filepath)
         dataset.to_zarr('./data/hi.zarr')
 
-        pass
-
     def format_date(self, date_str: str) -> date:
         """
         Takes a date in mm-dd-yyyy format and returns a date object
@@ -170,8 +168,6 @@ class NWPPipeline(GCPPipeline):
             self.unzip(download_path, unzipped_path)
 
             # preprocess data
-                # read in the data using xr, apply crops etc etc and save to disk 
-                # in place of the original data and delete the xarray object in memory
             self.preprocess(unzipped_path)
             
             # upload to GCP
