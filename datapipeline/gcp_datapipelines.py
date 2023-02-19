@@ -233,24 +233,35 @@ class PVPipeline(GCPPipeline):
 
         if len(df) > 288 * 10:  # more than 10 days of data
 
-            name = key.split("/")[-1]
-
             # resample to 15 minutes
             df = df.resample("15T").mean()
 
-            # take difference so its ~power not cumulative
+            df['site_name'] = key
+            df['timestamp'] = df.index
+
             if "instantaneous_power_gen_W" in df.columns:
-                df.rename(columns={"instantaneous_power_gen_W": name}, inplace=True)
+                df.rename(columns={"instantaneous_power_gen_W": "instantaneous_power_W"}, inplace=True)
+
+            # if there is no instantaneous power, use diff operator to convert cumulative to instantaneous
             elif "cumulative_energy_gen_Wh" in df.columns:
-                df.rename(columns={"cumulative_energy_gen_Wh": name}, inplace=True)
+                df.rename(columns={"cumulative_energy_gen_Wh": "instantaneous_power_W"}, inplace=True)
                 df.diff(inplace=True)
                 df[df < 0] = 0
+
             elif "energy_gen_Wh" in df.columns:
-                df.rename(columns={"energy_gen_Wh": name}, inplace=True)
+                df.rename(columns={"energy_gen_Wh": "instantaneous_power_W"}, inplace=True)
+                # CHECK IF THIS CASE NEEDS TO BE DIFFERENCED
+
             else:
-                raise Exception('Data does not contain "cumulative_energy_gen_Wh" or "energy_gen_Wh"')
+                logging.warning(f'{key} does not contain the necessary columns for power generation')
 
+        # importing some preprocesing parameters from config
+        start_date = datetime.strptime(self.config['start_date'], '%m-%d-%Y').date()
+        end_date = datetime.strptime(self.config['end_date'], '%m-%d-%Y').date()
+        assert start_date <= end_date, 'Configuration Error: start date must <= end date'
 
+        # drop invalid dates
+        df.drop(df[(df['timestamp'] < start_date) | (df['timestamp'] > end_date)].index, inplace=True)
 
         return
 
@@ -289,35 +300,28 @@ class PVPipeline(GCPPipeline):
         self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv')
         self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv')
 
-        # importing some preprocesing parameters from config
-        start_date = datetime.strptime(self.config['start_date'], '%m-%d-%Y').date()
-        end_date = datetime.strptime(self.config['end_date'], '%m-%d-%Y').date()
-        max_lat, min_lat = self.config['preprocess']['latitude']
-        min_lon, max_lon = self.config['preprocess']['longitude']
-        min_time, max_time = self.config['preprocess']['time_range']
-
-        assert start_date <= end_date, 'Configuration Error: start date must <= end date'
-        assert min_lat <= max_lat, 'Configuration Error: min latitude must <= max latitude'
-        assert min_lon <= max_lon, 'Configuration Error: min longitude must <= max longitude'
-        assert min_lon <= max_lon, 'Configuration Error: min longitude must <= max longitude'
-
         # preprocessing and aggregating site-level data
-        total_df = None
+        sites = []
         for i, key in enumerate(keys, 2):
             logging.info(f'Processing Key #{i}: {key}')
             site_df = pd.read_hdf(hdf_path, key)
-            name = key.split("/")[-1]
             self.preprocess(site_df)
+            sites.append(site_df)
 
-            if total_df is None:
-                total_df = site_df[[name]]
-            else:
-                total_df = total_df.join(site_df[[name]], how="outer")
+        # OR using list comprehension
+        # sites = [self.preprocess(site_df) for site_df in [pd.read_hdf(hdf_path, key) for key in keys]]
 
-        # sorting data (optional)
+        total_df = pd.concat(sites, axis=0, ignore_index=True)
+
+        # creating MultiIndex (optional)
+        new_index = pd.MultiIndex.from_frame(total_df, names=['timestamp', 'site_name'])
+        total_df.set_index(new_index)
+        total_df.sort_index(by='timestamp', ascending=True, inplace=True)
 
         # upload to GCP
-        self.gcp_upload()
+        total_df.to_csv(tmpdir + 'pv_time_series.csv')
+        self.gcp_upload(source=tmpdir + 'pv_time_series.csv',
+                        blob_name=self.config['gcp_dest_blob'] + 'pv_time_series.csv')
         self.teardown(tmpdir)
 
 
