@@ -1,0 +1,15 @@
+{   
+    "data_type":"pv",
+    "file_path": "/Users/carterdemars/Desktop/pv_data_italy",
+    "error_log_path":"./",
+    "gcp_bucket":"ocf_base_data",
+    "gcp_dest_blob":"pv/",
+    "preprocess": {
+        "date_range": ["01-01-2022", "01-30-2022"],
+        "time_range": ["5", "22"],
+        "latitude": [35, 50],
+        "longitude": [5, 20],
+    }
+
+
+}

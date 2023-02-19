@@ -1,12 +1,17 @@
 import json
+import logging
+import os
+import pandas as pd
 import zipfile
 import shutil
 import xarray as xr
 
-from os import getcwd
 from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
+
+logging.basicConfig(level=logging.INFO)
+
 
 # For each chunk
 # 1. Download from HuggingFace
@@ -92,7 +97,7 @@ class NWPPipeline(GCPPipeline):
                 filename=filepath,
                 repo_type=self.config['hf_repo_type'],
                 token=self.config['hf_token'],
-                cache_dir=getcwd() + '/cache/downloaded'
+                cache_dir=os.getcwd() + '/cache/downloaded'
             )
             return download_path
         except Exception as error:
@@ -148,14 +153,14 @@ class NWPPipeline(GCPPipeline):
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
 
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
-        
+
         cur_date = START_DATE
         while cur_date <= END_DATE:
 
             # download file
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
-                                            .replace('MONTH', str(cur_date.month).zfill(2)) \
-                                            .replace('DATE', str(cur_date.strftime("%Y%m%d")))
+                .replace('MONTH', str(cur_date.month).zfill(2)) \
+                .replace('DATE', str(cur_date.strftime("%Y%m%d")))
             download_path = self.download(huggingface_path)
 
             if type(download_path) != 'str':
@@ -169,7 +174,7 @@ class NWPPipeline(GCPPipeline):
 
             # preprocess data
             self.preprocess(unzipped_path)
-            
+
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
             self.gcp_upload(unzipped_path, self.config['gcp_dest_blob'] + blob_file_name)
@@ -193,7 +198,7 @@ class SatellitePipeline(GCPPipeline):
                     filename=file,
                     repo_type=self.config['hf_repo_type'],
                     token=self.config['hf_token'],
-                    cache_dir=getcwd()
+                    cache_dir=os.getcwd()
                 )
         except Exception as error:
             print(error)
@@ -211,11 +216,109 @@ class SatellitePipeline(GCPPipeline):
         pass
 
     def execute(self) -> None:
-        self.download()
+        self.read_data()
         self.unzip()
         self.prepocess()
         self.gcp_upload()
         self.teardown()
+
+
+class PVPipeline(GCPPipeline):
+    def __init__(self, config: str) -> None:
+        super().__init__(config)
+
+    def preprocess(self, key: str, df: pd.DataFrame):
+
+        df.resample("5T", inplace=True).mean()
+
+        if len(df) > 288 * 10:  # more than 10 days of data
+
+            name = key.split("/")[-1]
+
+            # resample to 15 minutes
+            df = df.resample("15T").mean()
+
+            # take difference so its ~power not cumulative
+            if "instantaneous_power_gen_W" in df.columns:
+                df.rename(columns={"instantaneous_power_gen_W": name}, inplace=True)
+            elif "cumulative_energy_gen_Wh" in df.columns:
+                df.rename(columns={"cumulative_energy_gen_Wh": name}, inplace=True)
+                df.diff(inplace=True)
+                df[df < 0] = 0
+            elif "energy_gen_Wh" in df.columns:
+                df.rename(columns={"energy_gen_Wh": name}, inplace=True)
+            else:
+                raise Exception('Data does not contain "cumulative_energy_gen_Wh" or "energy_gen_Wh"')
+
+
+
+        return
+
+    def execute(self) -> None:
+
+        assert self.config['data_type'] == 'pv', 'Configuration Error: Expects "pv" data_type in configuration'
+        filepath = self.config['file_path']
+        hdf_path = None
+
+        if not os.path.exists(filepath):
+            logging.critical("Directory does not exist at specified filepath")
+
+        for file in os.listdir(filepath):
+
+            if file.endswith('.hdf'):
+                hdf_path = filepath + '/' + file
+
+            # metadata is uploaded directly to GCP
+            elif file.endswith('.csv'):
+                self.gcp_upload(source=filepath + '/' + file, blob_name=self.config['gcp_dest_blob'] + file)
+
+        if not hdf_path:
+            logging.critical("HDF5 file does not exist within the specified directory")
+
+        with pd.HDFStore(hdf_path) as hdf:
+            keys = hdf.keys()
+
+        # create temp directory
+        tmpdir = filepath + "/tmp"
+        if not os.path.exists(tmpdir):
+            os.makedirs(tmpdir)
+
+        # first two keys are uploaded directly to GCP
+        pd.read_hdf(hdf_path, keys[0]).to_csv(tmpdir + 'pv_stats.csv')
+        pd.read_hdf(hdf_path, keys[1]).to_csv(tmpdir + 'pv_missing.csv')
+        self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv')
+        self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv')
+
+        # importing some preprocesing parameters from config
+        start_date = datetime.strptime(self.config['start_date'], '%m-%d-%Y').date()
+        end_date = datetime.strptime(self.config['end_date'], '%m-%d-%Y').date()
+        max_lat, min_lat = self.config['preprocess']['latitude']
+        min_lon, max_lon = self.config['preprocess']['longitude']
+        min_time, max_time = self.config['preprocess']['time_range']
+
+        assert start_date <= end_date, 'Configuration Error: start date must <= end date'
+        assert min_lat <= max_lat, 'Configuration Error: min latitude must <= max latitude'
+        assert min_lon <= max_lon, 'Configuration Error: min longitude must <= max longitude'
+        assert min_lon <= max_lon, 'Configuration Error: min longitude must <= max longitude'
+
+        # preprocessing and aggregating site-level data
+        total_df = None
+        for i, key in enumerate(keys, 2):
+            logging.info(f'Processing Key #{i}: {key}')
+            site_df = pd.read_hdf(hdf_path, key)
+            name = key.split("/")[-1]
+            self.preprocess(site_df)
+
+            if total_df is None:
+                total_df = site_df[[name]]
+            else:
+                total_df = total_df.join(site_df[[name]], how="outer")
+
+        # sorting data (optional)
+
+        # upload to GCP
+        self.gcp_upload()
+        self.teardown(tmpdir)
 
 
 if __name__ == '__main__':
