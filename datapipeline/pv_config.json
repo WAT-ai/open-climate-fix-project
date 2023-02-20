@@ -3,10 +3,10 @@
     "file_path": "/Users/carterdemars/Desktop/pv_data_italy",
     "error_log_path":"./",
     "gcp_bucket":"ocf_base_data",
-    "gcp_dest_blob":"pv/",
+    "gcp_dest_blob":"pv/italy/",
     "preprocess": {
-        "date_range": ["01-01-2020", "01-30-2020"],
-        "time_range": ["5", "22"],
+        "date_range": ["01-01-2015", "01-01-2023"],
+        "time_range": ["6", "21"],
         "latitude": [35, 50],
         "longitude": [5, 20]
     }
