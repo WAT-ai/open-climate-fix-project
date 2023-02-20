@@ -226,7 +226,7 @@ class PVPipeline(GCPPipeline):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
-    def preprocess(self, key: str, df) -> pd.DataFrame:
+    def preprocess(self, key: str, df: pd.DataFrame) -> pd.DataFrame:
 
         if "instantaneous_power_gen_W" in df.columns:
             df.dropna(subset=["instantaneous_power_gen_W"], inplace=True)
@@ -301,7 +301,7 @@ class PVPipeline(GCPPipeline):
 
         # preprocessing and aggregating site-level data
         sites = []
-        for i, key in enumerate(keys[2:5]):
+        for i, key in enumerate(keys[2:]):
             logging.info(f'Processing Key #{i}: {key}')
             site_df = pd.read_hdf(hdf_path, key)
             site_df = self.preprocess(key, site_df)
