@@ -4,6 +4,7 @@ import shutil
 import xarray as xr
 
 from os import getcwd
+from ipdb import set_trace
 from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
@@ -37,8 +38,8 @@ class GCPPipeline:
         Returns:
             None
         """
-        print(f'Unzipping {source}')
-        print(f'Extracting to {dest}')
+        print(f'Unzipping: {source}')
+        print(f'Extracting to: {dest}')
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
@@ -97,7 +98,8 @@ class NWPPipeline(GCPPipeline):
             return download_path
         except Exception as error:
             log_file = open(self.config['error_log_path'] + 'error_logs.txt', 'a')
-            log_file.write(str(error))
+            error_log = str(error) + f"\nAttempted to download filepath: {filepath}"
+            log_file.write(str(error_log))
             return error
 
     def preprocess(self, filepath: str) -> None:
@@ -158,13 +160,12 @@ class NWPPipeline(GCPPipeline):
                                             .replace('DATE', str(cur_date.strftime("%Y%m%d")))
             download_path = self.download(huggingface_path)
 
-            if type(download_path) != 'str':
-                print(download_path)
+            if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
                 continue
 
             # unzip file
-            unzipped_path = 'cache/unzipped/' + download_path[-30:-4]
+            unzipped_path = 'cache/unzipped/' + download_path[-25:-4]
             self.unzip(download_path, unzipped_path)
 
             # preprocess data
