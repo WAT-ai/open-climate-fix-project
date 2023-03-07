@@ -107,7 +107,7 @@ class NWPPipeline(GCPPipeline):
             log_file.write(str(error_log))
             return error
 
-    def preprocess(self, filepath: str) -> None:
+    def preprocess(self, filepath: str, to_path: str) -> None:
         """
         Preprocesses the zarr file at filepath according to configuration parameters
 
@@ -128,9 +128,8 @@ class NWPPipeline(GCPPipeline):
                               longitude=slice(min_lon, max_lon),
                               time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)]))
 
-        # overwrites zarr file with post-processed data
-        self.teardown(filepath)
-        dataset.to_zarr('./data/hi.zarr')
+        dataset.to_zarr(to_path)
+        del dataset
 
     def format_date(self, date_str: str) -> date:
         """
@@ -170,15 +169,16 @@ class NWPPipeline(GCPPipeline):
                 continue
 
             # unzip file
-            unzipped_path = 'cache/unzipped/' + download_path[-25:-4]
+            unzipped_path = './cache/unzipped/' + download_path[-25:-4]
             self.unzip(download_path, unzipped_path)
 
             # preprocess data
-            self.preprocess(unzipped_path)
+            processed_path = './cache/preprocessed/' + download_path[-25:-4]
+            self.preprocess(unzipped_path, processed_path)
 
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
-            self.gcp_upload(unzipped_path, self.config['gcp_dest_blob'] + blob_file_name)
+            self.gcp_upload(processed_path, self.config['gcp_dest_blob'] + blob_file_name)
             self.teardown("cache")
 
             # increment date
@@ -186,7 +186,7 @@ class NWPPipeline(GCPPipeline):
 
 
 class SatellitePipeline(GCPPipeline):
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: str) -> None:
         super().__init__(config)
 
     def download(self) -> str:
@@ -326,7 +326,7 @@ class PVPipeline(GCPPipeline):
 
 
 if __name__ == '__main__':
-    config_path = 'pv_config.json'
-    datapipeline = PVPipeline(config=config_path)
+    config_path = 'nwp_config.json'
+    datapipeline = NWPPipeline(config_path)
     datapipeline.execute()
 
