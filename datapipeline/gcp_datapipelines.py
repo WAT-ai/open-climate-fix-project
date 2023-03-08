@@ -43,8 +43,8 @@ class GCPPipeline:
         Returns:
             None
         """
-        logging.info(f'Unzipping: {source}')
-        logging.info(f'Extracting to: {dest}')
+        logging.info(f'\nUnzipping: {source}')
+        logging.info(f'\nExtracting to: {dest}')
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
@@ -58,11 +58,12 @@ class GCPPipeline:
         Returns:
             None
         """
+        logging.info(f'Uploading {source} to {blob_name}.')
         storage_client = storage.Client()
         bucket = storage_client.bucket(blob_name)
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(source)
-        logging.info(f"File {source} uploaded to {blob_name}.")
+        logging.info(f'File {source} succesfully uploaded to {blob_name}.')
         return None
 
     def teardown(self, filepath: str) -> None:
@@ -72,6 +73,7 @@ class GCPPipeline:
         Args:
             filepath: location of directory to delete
         """
+        logging.info(f'Deleting: {filepath}')
         shutil.rmtree(filepath)
 
 
@@ -81,7 +83,7 @@ class NWPPipeline(GCPPipeline):
 
     def download(self, filepath: str) -> str:
         """
-        Downloads data from "filepath" location from HugginFace and 
+        Downloads data from "filepath" location from HuggingFace and 
         returns the location of the downloaded data. If the filepath 
         is not found, it logs the error in a log file.
 
@@ -103,7 +105,7 @@ class NWPPipeline(GCPPipeline):
             return download_path
         except Exception as error:
             log_file = open(self.config['error_log_path'] + 'error_logs.txt', 'a')
-            error_log = str(error) + f"\nAttempted to download filepath: {filepath}"
+            error_log = str(error) + f'\nAttempted to download filepath: {filepath}'
             log_file.write(str(error_log))
             return error
 
@@ -161,7 +163,7 @@ class NWPPipeline(GCPPipeline):
             # download file
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
-                .replace('DATE', str(cur_date.strftime("%Y%m%d")))
+                .replace('DATE', str(cur_date.strftime('%Y%m%d')))
             download_path = self.download(huggingface_path)
 
             if not isinstance(download_path, str):
@@ -179,7 +181,7 @@ class NWPPipeline(GCPPipeline):
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
             self.gcp_upload(processed_path, self.config['gcp_dest_blob'] + blob_file_name)
-            self.teardown("cache")
+            self.teardown('cache')
 
             # increment date
             cur_date += timedelta(days=1)
@@ -190,7 +192,7 @@ class SatellitePipeline(GCPPipeline):
         super().__init__(config)
 
     def download(self) -> str:
-        logging.info("Downloading Data")
+        logging.info('Downloading Data')
         try:
             for chunk in range(self.config['chunk_count'] + 1):
                 file = f"data/{self.config['year']}/hrv/{self.config['year']}_0000{str(chunk).zfill(2)}-of-0000{self.config['chunk_count']}.zarr.zip"
@@ -204,7 +206,7 @@ class SatellitePipeline(GCPPipeline):
         except Exception as error:
             logging.info(error)
 
-        logging.info("Download Complete")
+        logging.info('Download Complete')
 
         return 'THIS SHOULD BE THE PATH WHERE THE DATA WAS DOWNLOADED'
 
@@ -230,38 +232,38 @@ class PVPipeline(GCPPipeline):
 
     def preprocess(self, key: str, df: pd.DataFrame) -> pd.DataFrame:
 
-        if "instantaneous_power_gen_W" in df.columns:
-            df.dropna(subset=["instantaneous_power_gen_W"], inplace=True)
-            df = df.resample("15T").mean()
-            df.rename(columns={"instantaneous_power_gen_W": "instantaneous_power_W"}, inplace=True)
-            df.drop("cumulative_energy_gen_Wh", axis=1, inplace=True)
+        if 'instantaneous_power_gen_W' in df.columns:
+            df.dropna(subset=['instantaneous_power_gen_W'], inplace=True)
+            df = df.resample('15T').mean()
+            df.rename(columns={'instantaneous_power_gen_W': 'instantaneous_power_W'}, inplace=True)
+            df.drop('cumulative_energy_gen_Wh', axis=1, inplace=True)
 
         # if there is no instantaneous power, use diff operator to convert cumulative to instantaneous
-        elif "cumulative_energy_gen_Wh" in df.columns:
-            df.dropna(subset=["cumulative_energy_gen_Wh"], inplace=True)
-            df = df.resample("15T").mean()
-            df["cumulative_energy_gen_Wh"].diff(inplace=True)
-            df[df["cumulative_energy_gen_Wh"] < 0]["cumulative_energy_gen_Wh"] = 0
-            df.rename(columns={"cumulative_energy_gen_Wh": "instantaneous_power_W"}, inplace=True)
+        elif 'cumulative_energy_gen_Wh' in df.columns:
+            df.dropna(subset=['cumulative_energy_gen_Wh'], inplace=True)
+            df = df.resample('15T').mean()
+            df['cumulative_energy_gen_Wh'].diff(inplace=True)
+            df[df['cumulative_energy_gen_Wh'] < 0]['cumulative_energy_gen_Wh'] = 0
+            df.rename(columns={'cumulative_energy_gen_Wh': 'instantaneous_power_W'}, inplace=True)
 
-        elif "energy_gen_Wh" in df.columns:
-            df.rename(columns={"energy_gen_Wh": "instantaneous_power_W"}, inplace=True)
-            df = df.resample("15T").mean()
+        elif 'energy_gen_Wh' in df.columns:
+            df.rename(columns={'energy_gen_Wh': 'instantaneous_power_W'}, inplace=True)
+            df = df.resample('15T').mean()
             # CHECK IF THIS CASE NEEDS TO BE DIFFERENCED
 
         else:
             logging.warning(f'{key} does not contain the necessary columns for power generation')
 
-        df['system_id'] = key.split("/")[-1]
+        df['system_id'] = key.split('/')[-1]
         df['timestamp'] = df.index
 
         # importing some preprocessing parameters from config
-        start_date = datetime.strptime(self.config["preprocess"]["date_range"][0], '%m-%d-%Y')
-        end_date = datetime.strptime(self.config["preprocess"]["date_range"][1], '%m-%d-%Y')
+        start_date = datetime.strptime(self.config['preprocess']['date_range'][0], '%m-%d-%Y')
+        end_date = datetime.strptime(self.config['preprocess']['date_range'][1], '%m-%d-%Y')
         assert start_date <= end_date, 'Configuration Error: start date must <= end date'
 
         # drop invalid values and dates
-        df.dropna(subset=["instantaneous_power_W"], inplace=True)
+        df.dropna(subset=['instantaneous_power_W'], inplace=True)
         df = df[(df.index < end_date) & (df.index > start_date)]
 
         return df
@@ -273,7 +275,7 @@ class PVPipeline(GCPPipeline):
         hdf_path = None
 
         if not os.path.exists(filepath):
-            logging.critical("Directory does not exist at specified filepath")
+            logging.critical('Directory does not exist at specified filepath')
 
         for file in os.listdir(filepath):
 
@@ -285,13 +287,13 @@ class PVPipeline(GCPPipeline):
                 self.gcp_upload(source=filepath + '/' + file, blob_name=self.config['gcp_dest_blob'] + file)
 
         if not hdf_path:
-            logging.critical("HDF5 file does not exist within the specified directory")
+            logging.critical('HDF5 file does not exist within the specified directory')
 
         with pd.HDFStore(hdf_path) as hdf:
             keys = hdf.keys()
 
         # create temp directory
-        tmpdir = filepath + "/tmp"
+        tmpdir = filepath + '/tmp'
         if not os.path.exists(tmpdir):
             os.makedirs(tmpdir)
 
@@ -304,7 +306,7 @@ class PVPipeline(GCPPipeline):
         # preprocessing and aggregating site-level data
         sites = []
         for i, key in enumerate(keys[2:]):
-            logging.info(f'Processing Key #{i}: {key}')
+            logging.info(f'\nProcessing Key #{i}: {key}')
             site_df = pd.read_hdf(hdf_path, key)
             site_df = self.preprocess(key, site_df)
             sites.append(site_df)
