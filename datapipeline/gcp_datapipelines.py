@@ -58,12 +58,12 @@ class GCPPipeline:
         Returns:
             None
         """
-        logging.info(f'Uploading {source} to {blob_name}.')
+        logging.info(f'\nUploading {source} to {blob_name}.')
         storage_client = storage.Client()
         bucket = storage_client.bucket(blob_name)
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(source)
-        logging.info(f'File {source} succesfully uploaded to {blob_name}.')
+        logging.info(f'\nFile {source} succesfully uploaded to {blob_name}.')
         return None
 
     def teardown(self, filepath: str) -> None:
@@ -73,7 +73,7 @@ class GCPPipeline:
         Args:
             filepath: location of directory to delete
         """
-        logging.info(f'Deleting: {filepath}')
+        logging.info(f'\nDeleting: {filepath}')
         shutil.rmtree(filepath)
 
 
@@ -192,7 +192,7 @@ class SatellitePipeline(GCPPipeline):
         super().__init__(config)
 
     def download(self) -> str:
-        logging.info('Downloading Data')
+        logging.info(f'\nDownloading Data')
         try:
             for chunk in range(self.config['chunk_count'] + 1):
                 file = f"data/{self.config['year']}/hrv/{self.config['year']}_0000{str(chunk).zfill(2)}-of-0000{self.config['chunk_count']}.zarr.zip"
@@ -252,7 +252,7 @@ class PVPipeline(GCPPipeline):
             # CHECK IF THIS CASE NEEDS TO BE DIFFERENCED
 
         else:
-            logging.warning(f'{key} does not contain the necessary columns for power generation')
+            logging.warning(f'\n{key} does not contain the necessary columns for power generation')
 
         df['system_id'] = key.split('/')[-1]
         df['timestamp'] = df.index
@@ -275,7 +275,7 @@ class PVPipeline(GCPPipeline):
         hdf_path = None
 
         if not os.path.exists(filepath):
-            logging.critical('Directory does not exist at specified filepath')
+            logging.critical('\nDirectory does not exist at specified filepath')
 
         for file in os.listdir(filepath):
 
@@ -287,7 +287,7 @@ class PVPipeline(GCPPipeline):
                 self.gcp_upload(source=filepath + '/' + file, blob_name=self.config['gcp_dest_blob'] + file)
 
         if not hdf_path:
-            logging.critical('HDF5 file does not exist within the specified directory')
+            logging.critical('\nHDF5 file does not exist within the specified directory')
 
         with pd.HDFStore(hdf_path) as hdf:
             keys = hdf.keys()
