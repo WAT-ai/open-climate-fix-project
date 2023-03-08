@@ -6,7 +6,6 @@ import zipfile
 import shutil
 import xarray as xr
 
-from os import getcwd
 from ipdb import set_trace
 from google.cloud import storage
 from huggingface_hub import hf_hub_download
@@ -48,19 +47,21 @@ class GCPPipeline:
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
-    def gcp_upload(self, source: str, blob_name: str) -> None:
+    def gcp_upload(self, source: str, bucket_name: str, blob_name: str) -> None:
         """
         Uploads source dir to the GCP bucket specified the configuration
 
         Args:
             source: source file path
+            bucket_name: name of GCP bucket
+            blob_name: desired name of file in GCP
         
         Returns:
             None
         """
         logging.info(f'\nUploading {source} to {blob_name}.')
         storage_client = storage.Client()
-        bucket = storage_client.bucket(blob_name)
+        bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(source)
         logging.info(f'\nFile {source} succesfully uploaded to {blob_name}.')
@@ -180,7 +181,11 @@ class NWPPipeline(GCPPipeline):
 
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
-            self.gcp_upload(processed_path, self.config['gcp_dest_blob'] + blob_file_name)
+            self.gcp_upload(
+                source=processed_path,
+                bucket_name=self.config['gcp_bucket'],
+                blob_name=self.config['gcp_dest_blob'] + blob_file_name
+            )
             self.teardown('cache')
 
             # increment date
@@ -284,7 +289,11 @@ class PVPipeline(GCPPipeline):
 
             # metadata is uploaded directly to GCP
             elif file.endswith('.csv'):
-                self.gcp_upload(source=filepath + '/' + file, blob_name=self.config['gcp_dest_blob'] + file)
+                self.gcp_upload(
+                    source=filepath + '/' + file, 
+                    bucket_name=self.config['gcp_bucket'],
+                    blob_name=self.config['gcp_dest_blob'] + file
+                )
 
         if not hdf_path:
             logging.critical('\nHDF5 file does not exist within the specified directory')
@@ -300,8 +309,16 @@ class PVPipeline(GCPPipeline):
         # first two keys are uploaded directly to GCP
         pd.read_hdf(hdf_path, keys[0]).to_csv(tmpdir + '/pv_stats.csv')
         pd.read_hdf(hdf_path, keys[1]).to_csv(tmpdir + '/pv_missing.csv')
-        self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv')
-        self.gcp_upload(source=tmpdir + 'pv_stats.csv', blob_name=self.config['gcp_dest_blob'] + 'pv_missing.csv')
+        self.gcp_upload(
+            source=tmpdir + 'pv_stats.csv',
+            bucket_name=self.config['gcp_bucket'],
+            blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv'
+        )
+        self.gcp_upload(
+            source=tmpdir + 'pv_stats.csv',
+            bucket_name=self.config['gcp_bucket'],
+            blob_name=self.config['gcp_dest_blob'] + 'pv_missing.csv'
+        )
 
         # preprocessing and aggregating site-level data
         sites = []
@@ -322,13 +339,22 @@ class PVPipeline(GCPPipeline):
 
         # upload to GCP
         total_df.to_csv(tmpdir + '/pv_time_series.csv')
-        self.gcp_upload(source=tmpdir + '/pv_time_series.csv',
-                        blob_name=self.config['gcp_dest_blob'] + 'pv_time_series.csv')
+        self.gcp_upload(
+            source=tmpdir + '/pv_time_series.csv',
+            bucket_name=self.config['gcp_bucket'],
+            blob_name=self.config['gcp_dest_blob'] + 'pv_time_series.csv'
+        )
         self.teardown(tmpdir)
 
 
 if __name__ == '__main__':
-    config_path = 'nwp_config.json'
-    datapipeline = NWPPipeline(config_path)
-    datapipeline.execute()
-
+    config_path = 'pv_config.json'
+    datapipeline = PVPipeline(config_path)
+    for file in os.listdir("C:/Users/areel/watai/watai/data/pv"):
+        print(file)
+        datapipeline.gcp_upload(
+            source=f'C:/Users/areel/watai/watai/data/pv/{file}',
+            bucket_name='ocf_base_data',
+            blob_name=f'pv/raw/italy/{file}'
+        )
+    #datapipeline.execute()
