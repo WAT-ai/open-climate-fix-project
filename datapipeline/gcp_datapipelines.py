@@ -192,45 +192,6 @@ class NWPPipeline(GCPPipeline):
             cur_date += timedelta(days=1)
 
 
-class SatellitePipeline(GCPPipeline):
-    def __init__(self, config: str) -> None:
-        super().__init__(config)
-
-    def download(self) -> str:
-        logging.info(f'\nDownloading Data')
-        try:
-            for chunk in range(self.config['chunk_count'] + 1):
-                file = f"data/{self.config['year']}/hrv/{self.config['year']}_0000{str(chunk).zfill(2)}-of-0000{self.config['chunk_count']}.zarr.zip"
-                path = hf_hub_download(
-                    repo_id=self.config['hf_repo_id'],
-                    filename=file,
-                    repo_type=self.config['hf_repo_type'],
-                    token=self.config['hf_token'],
-                    cache_dir=os.getcwd()
-                )
-        except Exception as error:
-            logging.info(error)
-
-        logging.info('Download Complete')
-
-        return 'THIS SHOULD BE THE PATH WHERE THE DATA WAS DOWNLOADED'
-
-    def preprocess(self) -> None:
-        """
-        Preprocesses the data as desired
-        This function should probably take instructions from the download_configurations JSON file about the crop range, date range and features to drop
-        """
-
-        pass
-
-    def execute(self) -> None:
-        self.download()
-        self.unzip()
-        self.preprocess()
-        self.gcp_upload()
-        self.teardown()
-
-
 class PVPipeline(GCPPipeline):
     def __init__(self, config: str) -> None:
         super().__init__(config)
