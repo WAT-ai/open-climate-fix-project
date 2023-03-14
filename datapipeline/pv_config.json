@@ -1,6 +1,6 @@
 {   
     "data_type":"pv",
-    "file_path": "/Users/carterdemars/Desktop/pv_data_italy",
+    "file_path": "C:/Users/areel/watai/watai/data/pv",
     "error_log_path":"./",
     "gcp_bucket":"ocf_base_data",
     "gcp_dest_blob":"pv/italy/",
@@ -10,6 +10,4 @@
         "latitude": [35, 50],
         "longitude": [5, 20]
     }
-
-
 }

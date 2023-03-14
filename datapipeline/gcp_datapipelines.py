@@ -274,7 +274,6 @@ class PVPipeline(GCPPipeline):
         return df
 
     def execute(self) -> None:
-
         assert self.config['data_type'] == 'pv', 'Configuration Error: Expects "pv" data_type in configuration'
         filepath = self.config['file_path']
         hdf_path = None
@@ -310,12 +309,12 @@ class PVPipeline(GCPPipeline):
         pd.read_hdf(hdf_path, keys[0]).to_csv(tmpdir + '/pv_stats.csv')
         pd.read_hdf(hdf_path, keys[1]).to_csv(tmpdir + '/pv_missing.csv')
         self.gcp_upload(
-            source=tmpdir + 'pv_stats.csv',
+            source=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv'
         )
         self.gcp_upload(
-            source=tmpdir + 'pv_stats.csv',
+            source=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_missing.csv'
         )
@@ -350,11 +349,4 @@ class PVPipeline(GCPPipeline):
 if __name__ == '__main__':
     config_path = 'pv_config.json'
     datapipeline = PVPipeline(config_path)
-    for file in os.listdir("C:/Users/areel/watai/watai/data/pv"):
-        print(file)
-        datapipeline.gcp_upload(
-            source=f'C:/Users/areel/watai/watai/data/pv/{file}',
-            bucket_name='ocf_base_data',
-            blob_name=f'pv/raw/italy/{file}'
-        )
-    #datapipeline.execute()
+    datapipeline.execute()
