@@ -121,6 +121,7 @@ class NWPPipeline(GCPPipeline):
         Args:
             filepath: location of zarr path
         """
+        logging.info(f'\Preprocessing {source} and saving to {to_path}.')
         max_lat, min_lat = self.config['preprocess']['latitude']
         min_lon, max_lon = self.config['preprocess']['longitude']
         min_time, max_time = self.config['preprocess']['time_range']
@@ -308,6 +309,6 @@ class PVPipeline(GCPPipeline):
 
 
 if __name__ == '__main__':
-    config_path = 'pv_config.json'
-    datapipeline = PVPipeline(config_path)
+    config_path = 'datapipeline/nwp_config.json'
+    datapipeline = NWPPipeline(config_path)
     datapipeline.execute()
