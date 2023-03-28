@@ -1,3 +1,4 @@
+import glob
 import json
 import logging
 import os
@@ -47,7 +48,7 @@ class GCPPipeline:
         with zipfile.ZipFile(source, 'r') as zip_ref:
             zip_ref.extractall(dest)
 
-    def gcp_upload(self, source: str, bucket_name: str, blob_name: str) -> None:
+    def gcp_upload_file(self, source: str, bucket_name: str, blob_name: str) -> None:
         """
         Uploads source dir to the GCP bucket specified the configuration
 
@@ -66,6 +67,17 @@ class GCPPipeline:
         blob.upload_from_filename(source)
         logging.info(f'\nFile {source} succesfully uploaded to {blob_name}.')
         return None
+
+    def gcp_upload_dir(self, source: str, bucket_name: str, blob_name: str):
+        logging.info(f'\nUploading {source} to {blob_name}.')
+        rel_paths = glob.glob(source + '/**', recursive=True)
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(bucket_name)
+        for local_file in rel_paths:
+            remote_path = f'{blob_name}/{"/".join(local_file.split(os.sep)[1:])}'
+            if os.path.isfile(local_file):
+                blob = bucket.blob(remote_path)
+                blob.upload_from_filename(local_file)
 
     def teardown(self, filepath: str) -> None:
         """
@@ -182,7 +194,7 @@ class NWPPipeline(GCPPipeline):
 
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
-            self.gcp_upload(
+            self.gcp_upload_dir(
                 source=processed_path,
                 bucket_name=self.config['gcp_bucket'],
                 blob_name=self.config['gcp_dest_blob'] + blob_file_name
@@ -250,7 +262,7 @@ class PVPipeline(GCPPipeline):
 
             # metadata is uploaded directly to GCP
             elif file.endswith('.csv'):
-                self.gcp_upload(
+                self.gcp_upload_file(
                     source=filepath + '/' + file, 
                     bucket_name=self.config['gcp_bucket'],
                     blob_name=self.config['gcp_dest_blob'] + file
@@ -270,12 +282,12 @@ class PVPipeline(GCPPipeline):
         # first two keys are uploaded directly to GCP
         pd.read_hdf(hdf_path, keys[0]).to_csv(tmpdir + '/pv_stats.csv')
         pd.read_hdf(hdf_path, keys[1]).to_csv(tmpdir + '/pv_missing.csv')
-        self.gcp_upload(
+        self.gcp_upload_file(
             source=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv'
         )
-        self.gcp_upload(
+        self.gcp_upload_file(
             source=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_missing.csv'
@@ -300,7 +312,7 @@ class PVPipeline(GCPPipeline):
 
         # upload to GCP
         total_df.to_csv(tmpdir + '/pv_time_series.csv')
-        self.gcp_upload(
+        self.gcp_upload_file(
             source=tmpdir + '/pv_time_series.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_time_series.csv'
@@ -309,6 +321,6 @@ class PVPipeline(GCPPipeline):
 
 
 if __name__ == '__main__':
-    config_path = 'datapipeline/nwp_config.json'
+    config_path = './nwp_config.json'
     datapipeline = NWPPipeline(config_path)
     datapipeline.execute()

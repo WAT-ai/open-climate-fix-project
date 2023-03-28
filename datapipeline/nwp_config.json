@@ -12,8 +12,13 @@
     "gcp_dest_blob":"nwp/",
     "preprocess": {
         "time_range": ["6", "21"],
-        "latitude": [-45, 0],
-        "longitude": [105, 160],
-        "features": ["cdir", "fdir", "uvb", "skt"]
+        "latitude": [0, 26],
+        "longitude": [34, 50],
+        "features": ["alnid", "alnip", "aluvd", "aluvp", "bld", "blh", "cape", "cbh", "cdir", "cp", "crr", "csf", "d2m",
+                     "deg0l", "dndza", "dndzn", "dwi", "fdir", "hcc", "ie", "ilspf", "ishf", "kx", "latitude", "lcc",
+                     "longitude", "lsf", "lsp", "lsrr", "mcc", "pev", "ptype", "skt", "slhf", "sp", "ssr", "ssrc",
+                     "ssrd", "ssrdc", "str", "strc", "strd", "strdc", "t2m", "tcc", "tciw", "tclw", "tcwv", "time",
+                     "tisr", "totalx", "tp", "tsr", "tsrc", "ttr", "ttrc", "u10", "u100", "u10n", "uvb", "v10", "v100",
+                     "wind"]
     }
 }
