@@ -50,10 +50,11 @@ class GCPPipeline:
 
     def gcp_upload_file(self, source: str, bucket_name: str, blob_name: str) -> None:
         """
-        Uploads source dir to the GCP bucket specified the configuration
+        Uploads the source file to the GCP bucket specified in the configuration
+        Used by the gcp_upload_dir method
 
         Args:
-            source: source file path
+            source: file path of source file
             bucket_name: name of GCP bucket
             blob_name: desired name of file in GCP
         
@@ -69,6 +70,17 @@ class GCPPipeline:
         return None
 
     def gcp_upload_dir(self, source: str, bucket_name: str, blob_name: str):
+        """
+        Uploads the source dir to the GCP bucket specified in the configuration
+
+        Args:
+            source: file path of source dir
+            bucket_name: name of GCP bucket
+            blob_name: desired name of file in GCP
+        
+        Returns:
+            None
+        """
         logging.info(f'\nUploading {source} to {blob_name}.')
         rel_paths = glob.glob(source + '/**', recursive=True)
         storage_client = storage.Client()
