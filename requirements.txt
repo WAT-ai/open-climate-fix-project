@@ -2,3 +2,5 @@
 jpeg_xl_float_with_nans
 imagecodecs
 wget
+google-api-python-client
+google-cloud-storage
