@@ -12,8 +12,8 @@
     "gcp_dest_blob":"nwp/",
     "preprocess": {
         "time_range": ["6", "21"],
-        "latitude": [0, 26],
-        "longitude": [34, 50],
+        "latitude": [28, 58],
+        "longitude": [-3, 28],
         "features": ["alnid", "alnip", "aluvd", "aluvp", "bld", "blh", "cape", "cbh", "cdir", "cp", "crr", "csf", "d2m",
                      "deg0l", "dndza", "dndzn", "dwi", "fdir", "hcc", "ie", "ilspf", "ishf", "kx", "latitude", "lcc",
                      "longitude", "lsf", "lsp", "lsrr", "mcc", "pev", "ptype", "skt", "slhf", "sp", "ssr", "ssrc",

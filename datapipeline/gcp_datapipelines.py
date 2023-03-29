@@ -82,14 +82,15 @@ class GCPPipeline:
             None
         """
         logging.info(f'\nUploading {source} to {blob_name}.')
-        rel_paths = glob.glob(source + '/**', recursive=True)
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(bucket_name)
-        for local_file in rel_paths:
-            remote_path = f'{blob_name}/{"/".join(local_file.split(os.sep)[1:])}'
-            if os.path.isfile(local_file):
+        for path, subdirs, files in os.walk(source):
+            for name in files:
+                path_local = os.path.join(path, name)
+                blob_path = path_local.replace('\\','/')
+                remote_path = f'{blob_name}/{"/".join(blob_path.split(os.sep)[1:])}{blob_path.replace(source, "")[1:]}'
                 blob = bucket.blob(remote_path)
-                blob.upload_from_filename(local_file)
+                blob.upload_from_filename(path_local)
 
     def teardown(self, filepath: str) -> None:
         """
@@ -333,6 +334,6 @@ class PVPipeline(GCPPipeline):
 
 
 if __name__ == '__main__':
-    config_path = 'datapipeline/nwp_config.json'
+    config_path = './nwp_config.json'
     datapipeline = NWPPipeline(config_path)
     datapipeline.execute()
