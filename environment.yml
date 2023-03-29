@@ -13,3 +13,4 @@ dependencies:
   - huggingface_hub
   - cupy
   - ipdb
+  - plotly
