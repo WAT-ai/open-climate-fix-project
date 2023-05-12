@@ -14,6 +14,4 @@ dependencies:
   - huggingface_hub
   - cupy
   - ipdb
-=========
-  - plotly
->>>>>>>>> Temporary merge branch 2
+  
