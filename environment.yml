@@ -10,6 +10,7 @@ dependencies:
   - scikit-learn
   - zarr
   - dask
+  - plotly
   - huggingface_hub
   - cupy
   - google
