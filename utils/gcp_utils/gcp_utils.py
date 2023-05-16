@@ -12,7 +12,7 @@ class GCPUtils:
         Downloads a given directory from GCP
 
         Args:
-            remote_path: path of dir in GCP storage (after bucket name)
+            remote_path: path of dir in GCP storage
             destination_path: file path where data will be downloaded
         """
 
