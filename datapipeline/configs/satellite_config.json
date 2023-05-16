@@ -1,0 +1,12 @@
+{   
+    "data_type":"satellite",
+    "year":2022,
+    "chunk_count":56,
+    "hf_repo_id":"openclimatefix/eumetsat-rss",
+    "hf_repo_type":"dataset",
+    "hf_token":"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",
+    "preprocess": {
+        "latitude": [1, 10],
+        "longitude": [1, 10]
+    }
+}
