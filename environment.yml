@@ -11,3 +11,7 @@ dependencies:
   - zarr
   - dask
   - plotly
+  - huggingface_hub
+  - cupy
+  - ipdb
+  
