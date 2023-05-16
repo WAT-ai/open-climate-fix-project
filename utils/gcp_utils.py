@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from datetime import date, timedelta
 
+logging.basicConfig(level=logging.INFO, format='')
 
 class GCPUtils:
 
@@ -15,8 +16,8 @@ class GCPUtils:
             destination_path: file path where data will be downloaded
         """
 
-        print(f'Downloading: {remote_path}')
-        print(f'To {destination_path}\n')
+        logging.info(f'Downloading: {remote_path}')
+        logging.info(f'To {destination_path}\n')
         os.system(f'gsutil -m cp -r {remote_path} {destination_path}')
         print('\n')
 
@@ -37,7 +38,6 @@ class GCPUtils:
             None
 
         """
-        print('\n')
         if not os.path.isdir(Path(destination_path)):
             os.mkdir(Path(destination_path))
 
