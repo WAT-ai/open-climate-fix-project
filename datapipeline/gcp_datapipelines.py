@@ -1,4 +1,3 @@
-import glob
 import json
 import logging
 import os
@@ -7,20 +6,11 @@ import zipfile
 import shutil
 import xarray as xr
 
-from ipdb import set_trace
 from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
-
-# For each chunk
-# 1. Download from HuggingFace
-# 2. Unzip data
-# 3. Preprocess
-# 4. Upload to GCP
-# abstract methods
-# hydra/gin + pydantic to read and validate configurations
 
 class GCPPipeline:
     def __init__(self, config: str) -> None:
