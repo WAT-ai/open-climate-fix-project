@@ -2,8 +2,8 @@
 Here is what the updated pipeline would do.
 ```mermaid
 graph LR
-A[HuggingFace] -- 1. Download --> B(2. Preprocess on <br/> Virtual Machine)
-B -- 3.Upload --> D{GCP Bucket}
+A[HuggingFace] -- 1. Download --> B{2. Preprocess on <br/> Virtual Machine}
+B -- 3.Upload --> D[GCP Bucket]
 ```
 ## Step 1: Downloading
 This step can be done using the `NWPPipeline.download` method. All we need to do is specify a path.
