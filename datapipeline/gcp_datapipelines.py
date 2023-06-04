@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 
-class GCPPipeline:
+class GCPPipelineUtils:
     def __init__(self, config: str) -> None:
         """
         Intialization function for pipeline. Expects a path to JSON configuration file.
@@ -93,7 +93,7 @@ class GCPPipeline:
         shutil.rmtree(filepath)
 
 
-class NWPPipeline(GCPPipeline):
+class NWPPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
@@ -137,18 +137,61 @@ class NWPPipeline(GCPPipeline):
             filepath: location of zarr path
         """
         logging.info(f'\nPreprocessing {filepath} and saving to {to_path}.')
-        max_lat, min_lat = self.config['preprocess']['latitude']
-        min_lon, max_lon = self.config['preprocess']['longitude']
-        min_time, max_time = self.config['preprocess']['time_range']
-
         dataset = xr.open_dataset(filepath, engine='zarr', chunks='auto')
-        dataset = dataset[self.config['preprocess']['features']]
-        dataset = dataset.sel(latitude=slice(min_lat, max_lat),
-                              longitude=slice(min_lon, max_lon),
-                              time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)]))
+        dataset = self.drop_dataset_features(
+            dataset=dataset, features=self.config['preprocess']['features']
+            )
+        dataset = self.crop_dataset_region(
+            dataset=dataset,
+            lat_range=self.config['preprocess']['latitude'],
+            lon_range=self.config['preprocess']['longitude']
+        )
+        dataset = self.crop_dataset_time(
+            dataset=dataset,
+            time_range=self.config['preprocess']['time_range']
+        )
 
         dataset.to_zarr(to_path)
         del dataset
+
+    def crop_dataset_region(self, dataset, lat_range: tuple(int, int), lon_range: tuple(int, int)):
+        """
+        Takes an Xarray dataset and returns a new dataset cropped within the given region
+
+        Args:
+            dataset: an Xarray dataset
+            lat_range: a tuple of min and max latitudinal
+            lon_range: a tuple of min and max longitudinal
+        """
+        max_lat, min_lat = lat_range
+        min_lon, max_lon = lon_range
+        return dataset.sel(
+            latitude=slice(min_lat, max_lat),
+            longitude=slice(min_lon, max_lon)
+        )
+   
+    def crop_dataset_time(self, dataset, time_range: tuple(int, int)):
+        """
+        Takes an Xarray dataset and returns a new dataset cropped within the given time range
+
+        Args:
+            dataset: an Xarray dataset
+            lon_range: a tuple of min and max times
+        """
+        min_time, max_time = time_range
+        return dataset.sel(
+            time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)])
+        )
+    
+    def drop_dataset_features(self, dataset, features: list[str]):
+        """
+        Takes an Xarray dataset and returns a new dataset with only the given features
+
+        Args:
+            dataset: an Xarray dataset
+            features: list of features (must be valid features of dataset)
+        """
+        return dataset[features]
 
     def format_date(self, date_str: str) -> date:
         """
@@ -208,7 +251,7 @@ class NWPPipeline(GCPPipeline):
             cur_date += timedelta(days=1)
 
 
-class PVPipeline(GCPPipeline):
+class PVPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
