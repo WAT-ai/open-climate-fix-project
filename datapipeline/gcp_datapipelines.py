@@ -210,6 +210,7 @@ class NWPPipeline(GCPPipelineUtils):
     def interpolate_nwp(self, dataset: xr.Dataset):
         """
         Takes an Xarray of NWP data and interpolates the data
+            interpolate after joining with PV
 
         Args:
             dataset: an Xarray of NWP data
