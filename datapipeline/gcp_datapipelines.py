@@ -154,7 +154,12 @@ class NWPPipeline(GCPPipelineUtils):
         dataset.to_zarr(to_path)
         del dataset
 
-    def crop_dataset_region(self, dataset, lat_range: tuple(int, int), lon_range: tuple(int, int)):
+    def crop_dataset_region(
+            self,
+            dataset: xr.Dataset,
+            lat_range: tuple(int, int),
+            lon_range: tuple(int, int)
+        ) -> xr.Dataset:
         """
         Takes an Xarray dataset and returns a new dataset cropped within the given region
 
@@ -162,6 +167,9 @@ class NWPPipeline(GCPPipelineUtils):
             dataset: an Xarray dataset
             lat_range: a tuple of min and max latitudinal
             lon_range: a tuple of min and max longitudinal
+
+        Returns:
+            An Xarray dataset with cropped region
         """
         max_lat, min_lat = lat_range
         min_lon, max_lon = lon_range
@@ -170,28 +178,57 @@ class NWPPipeline(GCPPipelineUtils):
             longitude=slice(min_lon, max_lon)
         )
    
-    def crop_dataset_time(self, dataset, time_range: tuple(int, int)):
+    def crop_dataset_time(self, dataset: xr.Dataset, time_range: tuple(int, int)) -> xr.Dataset:
         """
         Takes an Xarray dataset and returns a new dataset cropped within the given time range
 
         Args:
             dataset: an Xarray dataset
             lon_range: a tuple of min and max times
+
+        Returns:
+            An Xarray dataset with cropped time
         """
         min_time, max_time = time_range
         return dataset.sel(
             time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)])
         )
     
-    def drop_dataset_features(self, dataset, features: list[str]):
+    def drop_dataset_features(self, dataset: xr.Dataset, features: list[str]) -> xr.Dataset:
         """
         Takes an Xarray dataset and returns a new dataset with only the given features
 
         Args:
             dataset: an Xarray dataset
             features: list of features (must be valid features of dataset)
+
+        Returns:
+            An Xarray dataset with features dropped
         """
         return dataset[features]
+    
+    def interpolate_nwp(self, dataset: xr.Dataset):
+        """
+        Takes an Xarray of NWP data and interpolates the data
+
+        Args:
+            dataset: an Xarray of NWP data
+        """
+        pass
+
+    def join_nwp_pv(
+            self,
+            path_to_pv: str,
+            nwp_dataset: xr.Dataset
+        ):
+        """
+        Takes an nwp_dataset and a path to PV data and joins them together
+
+        Args:
+            path_to_pv: file path to PV dataset
+            nwp_dataset: an Xarray NWP dataset
+        """
+        pass
 
     def format_date(self, date_str: str) -> date:
         """
