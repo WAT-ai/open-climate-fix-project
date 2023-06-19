@@ -61,7 +61,7 @@ class GCPPipelineUtils:
         logging.info(f'\nFile {source} succesfully uploaded to {blob_name}.')
         return None
 
-    def gcp_upload_dir(self, source: str, bucket_name: str, blob_name: str):
+    def gcp_upload_dir(self, source: str, bucket_name: str, blob_name: str) -> None:
         """
         Uploads the source dir to the GCP bucket specified in the configuration
 
@@ -99,7 +99,7 @@ class NWPPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
-    def download(self, filepath: str) -> str:
+    def download(self, filepath: str) -> Optional[str]:
         """
         Downloads data from "filepath" location from HuggingFace and 
         returns the location of the downloaded data. If the filepath 
@@ -204,16 +204,6 @@ class NWPPipeline(GCPPipelineUtils):
             An Xarray dataset with features dropped
         """
         return dataset[features]
-    
-    def interpolate_nwp(self, dataset: xr.Dataset):
-        """
-        Takes an Xarray of NWP data and interpolates the data
-            interpolate after joining with PV
-
-        Args:
-            dataset: an Xarray of NWP data
-        """
-        pass
 
     def join_nwp_pv(
             self,
@@ -288,38 +278,47 @@ class NWPPipeline(GCPPipelineUtils):
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
                 .replace('DATE', str(cur_date.strftime('%Y%m%d')))
             download_path: Optional[str] = self.download(huggingface_path)
+            file_name = download_path[-25:-4]
 
             if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
                 continue
 
             # unzip file
-            unzipped_path = './cache/unzipped/' + download_path[-25:-4]
+            unzipped_path = './cache/unzipped/' + file_name
             self.unzip(download_path, unzipped_path)
 
-            # preprocess data
-            logging.info(f'\nPreprocessing {download_path[-25:-4]}')
+            # preprocess NWP data
+            logging.info(f'\nPreprocessing {file_name}')
+
+            preprocessed_path = './cache/preprocessed/' + file_name
             nwp_data: xr.Dataset = xr.open_dataset(unzipped_path, engine='zarr', chunks='auto')
             nwp_data = self.preprocess_nwp(nwp_data=nwp_data)
-
-            # left join PV with NWP and upload
-            if self.config['pv_join']['is_join_pv']:
-                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(
-                    nwp_dataset=nwp_data,
-                    pv_timeseries=self.config['pv_join']['is_join_pv'],
-                    pv_metadata=self.config['pv_join']['is_join_pv']
-                )
-            
-            preprocessed_path= './cache/preprocessed/' + download_path[-25:-4]
             nwp_data.to_zarr(preprocessed_path)
         
             # upload preprocessed NWP to GCP
-            blob_file_name = huggingface_path[5:-4]
+            blob_file_name = file_name
             self.gcp_upload_dir(
                 source=preprocessed_path,
                 bucket_name=self.config['gcp_bucket'],
                 blob_name=self.config['gcp_dest_blob'] + blob_file_name
             )
+
+            # left join PV with NWP and upload
+            if self.config['pv_join']['is_join_pv']:
+                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(
+                    nwp_dataset=nwp_data,
+                    pv_timeseries=self.config['pv_join']['pv_timeseries_path'],
+                    pv_metadata=self.config['pv_join']['pv_metadata_path']
+                )
+                joined_path = './cache/joined/' + huggingface_path[13:-9] + 'nwp_pv_joined.csv'
+                nwp_pv_joined.to_csv(joined_path)
+                self.gcp_upload_dir(
+                    source=joined_path,
+                    bucket_name=self.config['gcp_bucket'],
+                    blob_name=self.config['pv_join']['joined_dest_blob'] + blob_file_name
+                )
+            
             self.teardown('cache')
 
             # increment date

@@ -23,8 +23,9 @@
         ]
     },
     "pv_join":{
-        "is_join_pv":true,
+        "is_join_pv":false,
         "pv_timeseries_path":"",
-        "pv_metadata_path":""
+        "pv_metadata_path":"",
+        "joined_dest_blob":""
     }
 }
