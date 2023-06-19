@@ -10,6 +10,8 @@ from google.cloud import storage
 from huggingface_hub import hf_hub_download
 from datetime import date, datetime, timedelta
 
+from typing import Tuple, Optional
+
 logging.basicConfig(level=logging.INFO)
 
 class GCPPipelineUtils:
@@ -20,7 +22,7 @@ class GCPPipelineUtils:
         Args:
             config: path to JSON config object
         """
-        self.config = json.load(open(config))
+        self.config: dict  = json.load(open(config))
 
     def unzip(self, source: str, dest: str) -> None:
         """
@@ -125,40 +127,36 @@ class NWPPipeline(GCPPipelineUtils):
             log_file.write(str(error_log))
             return error
 
-    def preprocess(self, filepath: str, to_path: str) -> None:
+    def preprocess_nwp(self, nwp_data: xr.Dataset) -> xr.Dataset:
         """
-        Preprocesses the zarr file at filepath according to configuration parameters
+        Preprocesses and returns NWP Dataset according to configuration parameters
 
-        Selecting time slice (6 AM to 9 PM)
-        Dropping features
-        Selecting a region (longitudinal latitudinal coords)
+        - Drop features
+        - Crop time axis
+        - Crop a region (longitudinal latitudinal coordinates)
 
         Args:
-            filepath: location of zarr path
+            nwp_data: the NWP xarray dataset to be preprocessed
         """
-        logging.info(f'\nPreprocessing {filepath} and saving to {to_path}.')
-        dataset = xr.open_dataset(filepath, engine='zarr', chunks='auto')
-        dataset = self.drop_dataset_features(
-            dataset=dataset, features=self.config['preprocess']['features']
-            )
-        dataset = self.crop_dataset_region(
-            dataset=dataset,
+        nwp_data = self.drop_dataset_features(
+            dataset=nwp_data, features=self.config['preprocess']['features']
+        )
+        nwp_data = self.crop_dataset_region(
+            dataset=nwp_data,
             lat_range=self.config['preprocess']['latitude'],
             lon_range=self.config['preprocess']['longitude']
         )
-        dataset = self.crop_dataset_time(
-            dataset=dataset,
+        nwp_data = self.crop_dataset_time(
+            dataset=nwp_data,
             time_range=self.config['preprocess']['time_range']
         )
-
-        dataset.to_zarr(to_path)
-        del dataset
+        return nwp_data
 
     def crop_dataset_region(
             self,
             dataset: xr.Dataset,
-            lat_range: tuple(int, int),
-            lon_range: tuple(int, int)
+            lat_range: Tuple[int, int],
+            lon_range: Tuple[int, int]
         ) -> xr.Dataset:
         """
         Takes an Xarray dataset and returns a new dataset cropped within the given region
@@ -178,7 +176,7 @@ class NWPPipeline(GCPPipelineUtils):
             longitude=slice(min_lon, max_lon)
         )
    
-    def crop_dataset_time(self, dataset: xr.Dataset, time_range: tuple(int, int)) -> xr.Dataset:
+    def crop_dataset_time(self, dataset: xr.Dataset, time_range: Tuple[int, int]) -> xr.Dataset:
         """
         Takes an Xarray dataset and returns a new dataset cropped within the given time range
 
@@ -219,10 +217,10 @@ class NWPPipeline(GCPPipelineUtils):
 
     def join_nwp_pv(
             self,
-            path_to_pv_timeseries: str,
-            path_to_pv_metadata: str,
-            nwp_dataset: xr.Dataset
-        ):
+            nwp_dataset: xr.Dataset,
+            pv_timeseries_path: str,
+            pv_metadata_path: str
+        ) -> pd.DataFrame:
         """
         Takes an nwp_dataset and a path to PV data and joins them together
 
@@ -230,7 +228,34 @@ class NWPPipeline(GCPPipelineUtils):
             path_to_pv: file path to PV dataset
             nwp_dataset: an Xarray NWP dataset
         """
-        pass
+        pv_metadata: pd.DataFrame = pd.read_csv(pv_metadata_path)
+        pv_timeseries: pd.DataFrame = pd.read_csv(pv_timeseries_path)
+
+        pv_metadata.drop(columns=pv_metadata.columns[0], axis=1, inplace=True)        
+        pv_metadata['latitude'] = round(pv_metadata['latitude'] * 4) / 4
+        pv_metadata['longitude'] = round(pv_metadata['longitude'] * 4) / 4
+
+        pv_timeseries['timestamp'] = pd.to_datetime(pv_timeseries['timestamp'])
+        pv_timeseries = pv_timeseries.rename(columns={'timestamp':'time'})
+
+        start_time, end_time = nwp_dataset['time'][-1].values, nwp_dataset['time'][0].values
+        pv_timeseries = pv_timeseries[
+                (pv_timeseries['time'] >= start_time) &
+                (pv_timeseries['time'] <= end_time)
+            ].sort_values(by='time', ignore_index=True)
+        
+        nwp_df: pd.DataFrame = nwp_dataset.to_dataframe().reset_index()
+
+        nwp_pv_data: pd.DataFrame = pv_timeseries.merge(
+                pv_metadata[['system_id', 'latitude', 'longitude']],
+                how='left',
+                on='system_id'
+            ).merge(
+                nwp_df,
+                how='left',
+                on=['time', 'latitude', 'longitude']
+            )
+        return nwp_pv_data
 
     def format_date(self, date_str: str) -> date:
         """
@@ -250,12 +275,11 @@ class NWPPipeline(GCPPipelineUtils):
         """
         assert self.config['data_type'] == 'nwp', 'Configuration Error: Expects "nwp" data_type in configuration'
 
-        START_DATE = self.format_date(self.config['start_date'])
-        END_DATE = self.format_date(self.config['end_date'])
+        START_DATE: date = self.format_date(self.config['start_date'])
+        END_DATE: date = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
 
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
-
         cur_date = START_DATE
         while cur_date <= END_DATE:
 
@@ -263,7 +287,7 @@ class NWPPipeline(GCPPipelineUtils):
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
                 .replace('DATE', str(cur_date.strftime('%Y%m%d')))
-            download_path = self.download(huggingface_path)
+            download_path: Optional[str] = self.download(huggingface_path)
 
             if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
@@ -274,14 +298,25 @@ class NWPPipeline(GCPPipelineUtils):
             self.unzip(download_path, unzipped_path)
 
             # preprocess data
-            processed_path = './cache/preprocessed/' + download_path[-25:-4]
-            self.preprocess(unzipped_path, processed_path)
+            logging.info(f'\nPreprocessing {download_path[-25:-4]}')
+            nwp_data: xr.Dataset = xr.open_dataset(unzipped_path, engine='zarr', chunks='auto')
+            nwp_data = self.preprocess_nwp(nwp_data=nwp_data)
 
+            # left join PV with NWP and upload
+            if self.config['pv_join']['is_join_pv']:
+                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(
+                    nwp_dataset=nwp_data,
+                    pv_timeseries=self.config['pv_join']['is_join_pv'],
+                    pv_metadata=self.config['pv_join']['is_join_pv']
+                )
+            
+            preprocessed_path= './cache/preprocessed/' + download_path[-25:-4]
+            nwp_data.to_zarr(preprocessed_path)
         
-            # upload to GCP
+            # upload preprocessed NWP to GCP
             blob_file_name = huggingface_path[5:-4]
             self.gcp_upload_dir(
-                source=processed_path,
+                source=preprocessed_path,
                 bucket_name=self.config['gcp_bucket'],
                 blob_name=self.config['gcp_dest_blob'] + blob_file_name
             )
@@ -407,6 +442,6 @@ class PVPipeline(GCPPipelineUtils):
 
 
 if __name__ == '__main__':
-    config_path = './nwp_config.json'
+    config_path = './configs/nwp_config.json'
     datapipeline = NWPPipeline(config_path)
     datapipeline.execute()
