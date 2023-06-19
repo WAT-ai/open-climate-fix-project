@@ -219,7 +219,8 @@ class NWPPipeline(GCPPipelineUtils):
 
     def join_nwp_pv(
             self,
-            path_to_pv: str,
+            path_to_pv_timeseries: str,
+            path_to_pv_metadata: str,
             nwp_dataset: xr.Dataset
         ):
         """
@@ -276,6 +277,7 @@ class NWPPipeline(GCPPipelineUtils):
             processed_path = './cache/preprocessed/' + download_path[-25:-4]
             self.preprocess(unzipped_path, processed_path)
 
+        
             # upload to GCP
             blob_file_name = huggingface_path[5:-4]
             self.gcp_upload_dir(
