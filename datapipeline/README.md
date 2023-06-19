@@ -12,16 +12,10 @@ This is where the bulk of work is done. In this step the data is preprocessed an
 1.	Cropping region
 2.	Cropping time
 3.	Dropping unwanted features
-4.	Interpolate?
-5.	Other steps?
+4.	Interpolate (optional)
 6.	Join PV
+
+The process of joining NWP and PV is done using a SQL like join. Here is a diagram explaining the schema.
+![Alt text](image.png)
 ## Step 3: Upload
 This step is easy, we already have scripts to upload a directory from local to a GCP bucket.
-# Code Changes
-- Rename `GCPPipeline` to `GCPPipelineUtils`. Treat it is as a general class for storing GCP pipeline related helper functions.
-- Add functionality to interpolate and join PV data in `NWPPipeline`.
-- Break down the `NWPPipeline.preprocess` method into several smaller composable methods that will come together to preprocess the data. An example:
-	- `time_region_crop`
-	- `drop_features`
-	- `interpolate`
-	- `join_with_pv`
