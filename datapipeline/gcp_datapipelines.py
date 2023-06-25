@@ -48,7 +48,6 @@ class GCPPipelineUtils:
             bucket_name: name of GCP bucket
             blob_name: desired name of file in GCP
         """
-        import ipdb; ipdb.set_trace()
         bucket = self.storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(local_path)
@@ -291,7 +290,7 @@ class NWPPipeline(GCPPipelineUtils):
         START_DATE: date = self.format_date(self.config['start_date'])
         END_DATE: date = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
-        import ipdb; ipdb.set_trace()
+
         logger = Logger()
         if self.config['pv_join']['is_join_pv']:
             logging.info('Loading static PV resources')
