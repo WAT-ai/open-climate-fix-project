@@ -5,7 +5,7 @@ import os
 import shutil
 import zipfile
 from datetime import date, datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import pandas as pd
 import xarray as xr
@@ -26,19 +26,20 @@ class GCPPipelineUtils:
         self.config: dict  = json.load(open(config))
         self.storage_client = storage.Client()
 
-    def unzip(self, source: str, dest: str) -> None:
+    def unzip(self, zipped_path: str,  dest_path: str) -> None:
         """
-        Unzips all files from the source dir and extracts them to the dest dir
+        Unzips all the files from the zipped file at zipped_path
+        and extracts them to the dest dir at dest_path
 
         Args:
-            source: source file path
-            dest: destination file path
+            zipped_path: file path to the zipped file
+            dest_path: file path to the destination
         
         Returns:
             None
         """
-        with zipfile.ZipFile(source, 'r') as zip_ref:
-            zip_ref.extractall(dest)
+        with zipfile.ZipFile(zipped_path, 'r') as zip_ref:
+            zip_ref.extractall(dest_path)
 
     def gcp_upload_file(self, local_path: str, bucket_name: str, blob_name: str) -> None:
         """
@@ -69,8 +70,6 @@ class GCPPipelineUtils:
         Returns:
             None
         """
-        import ipdb; ipdb.set_trace()
-        assert os.path.isdir(local_path)
         bucket = self.storage_client.get_bucket(bucket_name)
         relative_paths = glob.glob(local_path + '/**', recursive=True)
         for local_file in tqdm(relative_paths):
@@ -197,43 +196,64 @@ class NWPPipeline(GCPPipelineUtils):
             An Xarray dataset with features dropped
         """
         return dataset[features]
-
-    def join_nwp_pv(
+    
+    def load_pv_resources(
             self,
-            nwp_dataset: xr.Dataset,
             pv_timeseries_path: str,
             pv_metadata_path: str
         ) -> pd.DataFrame:
         """
-        Takes an nwp_dataset and a path to PV data and joins them together
+        Loads the PV metadata and timeseries data, preprocesses, joins and returns them
 
         Args:
-            path_to_pv: file path to PV dataset
-            nwp_dataset: an Xarray NWP dataset
+            pv_timeseries_path: path to PV timeseries data
+            pv_metadata_path: path to PV metadata
+        
+        Returns:
+            A pandas dataframe with timeseries and metadata preprocessed and joined
         """
-        pv_metadata: pd.DataFrame = pd.read_csv(pv_metadata_path)
-        pv_timeseries: pd.DataFrame = pd.read_csv(pv_timeseries_path)
+        import ipdb; ipdb.set_trace()
 
-        pv_metadata.drop(columns=pv_metadata.columns[0], axis=1, inplace=True)        
-        pv_metadata['latitude'] = round(pv_metadata['latitude'] * 4) / 4
-        pv_metadata['longitude'] = round(pv_metadata['longitude'] * 4) / 4
+        pv_timeseries: pd.DataFrame = pd.read_csv(pv_timeseries_path)
+        pv_metadata: pd.DataFrame = pd.read_csv(pv_metadata_path)
 
         pv_timeseries['timestamp'] = pd.to_datetime(pv_timeseries['timestamp'])
         pv_timeseries = pv_timeseries.rename(columns={'timestamp':'time'})
 
+        pv_metadata = pv_metadata[['system_id', 'latitude', 'longitude']]
+        pv_metadata['latitude'] = round(pv_metadata['latitude'] * 4) / 4
+        pv_metadata['longitude'] = round(pv_metadata['longitude'] * 4) / 4
+
+        pv_joined = pv_timeseries.merge(
+            pv_metadata[['system_id', 'latitude', 'longitude']],
+            how='left',
+            on='system_id'
+        )
+        return pv_joined
+
+    def join_nwp_pv(
+            self,
+            nwp_dataset: xr.Dataset,
+            pv_data: pd.DataFrame
+        ) -> pd.DataFrame:
+        """
+        Accepts PV datasets along with NWP data and joins them together
+
+        Args:
+            nwp_dataset: an Xarray NWP dataset
+            pv_data: a Pandas PV dataset
+        """
+        import ipdb; ipdb.set_trace()
+
         start_time, end_time = nwp_dataset['time'][-1].values, nwp_dataset['time'][0].values
-        pv_timeseries = pv_timeseries[
-                (pv_timeseries['time'] >= start_time) &
-                (pv_timeseries['time'] <= end_time)
-            ].sort_values(by='time', ignore_index=True)
+        pv_data = pv_data[
+            (pv_data['time'] >= start_time) &
+            (pv_data['time'] <= end_time)
+        ].sort_values(by='time', ignore_index=True)
         
         nwp_df: pd.DataFrame = nwp_dataset.to_dataframe().reset_index()
 
-        nwp_pv_data: pd.DataFrame = pv_timeseries.merge(
-                pv_metadata[['system_id', 'latitude', 'longitude']],
-                how='left',
-                on='system_id'
-            ).merge(
+        nwp_pv_data: pd.DataFrame = pv_data.merge(
                 nwp_df,
                 how='left',
                 on=['time', 'latitude', 'longitude']
@@ -256,9 +276,6 @@ class NWPPipeline(GCPPipelineUtils):
         """
         Runs the NWP pipeline according to the configuration file
         """
-        import ipdb; ipdb.set_trace()
-        assert self.config['data_type'] == 'nwp', 'Configuration Error: Expects "nwp" data_type in configuration'
-
         TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
         UNZIPPED_PATH_PREFIX = './cache/unzipped/'
         PREPROCESSED_PATH_PREFIX = './cache/preprocessed/'
@@ -267,6 +284,15 @@ class NWPPipeline(GCPPipelineUtils):
         START_DATE: date = self.format_date(self.config['start_date'])
         END_DATE: date = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
+
+        import ipdb; ipdb.set_trace()
+
+        if self.config['pv_join']['is_join_pv']:
+            logging.info('\nLoading static PV resources')
+            pv_timeseries, pv_metadata = self.load_pv_resources(
+                pv_timeseries_path=self.config['pv_join']['pv_timeseries_path'],
+                pv_metadata_path=self.config['pv_join']['pv_metadata_path']
+            )
 
         cur_date = START_DATE
         while cur_date <= END_DATE:
@@ -304,14 +330,15 @@ class NWPPipeline(GCPPipelineUtils):
             )
 
             # left join PV with NWP and upload
+            import ipdb; ipdb.set_trace()
             if self.config['pv_join']['is_join_pv']:
-                logging.info(f'\nJoining PV+NWP: {cur_date}')
+                logging.info(f'\nJoining PV with NWP: {cur_date}')
                 nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(
                     nwp_dataset=nwp_data,
-                    pv_timeseries=self.config['pv_join']['pv_timeseries_path'],
-                    pv_metadata=self.config['pv_join']['pv_metadata_path']
+                    pv_timeseries=pv_timeseries,
+                    pv_metadata=pv_metadata
                 )
-                joined_path = JOINED_PATH_PREFIX + huggingface_path[13:-9] + 'nwp_pv_joined.csv'
+                joined_path = JOINED_PATH_PREFIX + 'nwp_pv_joined.csv'
                 nwp_pv_joined.to_csv(joined_path)
                 logging.info(f'\nUploading Joined: {cur_date}')
                 self.gcp_upload_dir(

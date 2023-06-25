@@ -23,9 +23,9 @@
         ]
     },
     "pv_join":{
-        "is_join_pv":false,
-        "pv_timeseries_path":"",
-        "pv_metadata_path":"",
+        "is_join_pv":true,
+        "pv_timeseries_path":"./data/pv/italy/pv_italy_timeseries.csv",
+        "pv_metadata_path":"./data/pv/italy/pv_italy_metadata.csv",
         "gcp_joined_dest_blob":"pv_nwp_joined/"
     }
 }
