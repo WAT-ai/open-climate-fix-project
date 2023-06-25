@@ -26,6 +26,6 @@
         "is_join_pv":false,
         "pv_timeseries_path":"",
         "pv_metadata_path":"",
-        "joined_dest_blob":""
+        "gcp_joined_dest_blob":"pv_nwp_joined/"
     }
 }
