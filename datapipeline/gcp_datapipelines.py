@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import zipfile
+import timeit
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple, List
 
@@ -18,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 class GCPPipelineUtils:
     def __init__(self, config: str) -> None:
         """
-        Intialization function for pipeline. Expects a path to JSON configuration file.
+        Intialization function for pipeline utils. Expects a path to JSON configuration file.
 
         Args:
             config: path to JSON config object
@@ -34,9 +35,6 @@ class GCPPipelineUtils:
         Args:
             zipped_path: file path to the zipped file
             dest_path: file path to the destination
-        
-        Returns:
-            None
         """
         with zipfile.ZipFile(zipped_path, 'r') as zip_ref:
             zip_ref.extractall(dest_path)
@@ -49,14 +47,11 @@ class GCPPipelineUtils:
             local_path: file path of the file to be uploaded
             bucket_name: name of GCP bucket
             blob_name: desired name of file in GCP
-        
-        Returns:
-            None
         """
+        import ipdb; ipdb.set_trace()
         bucket = self.storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(local_path)
-        return None
 
     def gcp_upload_dir(self, local_path: str, bucket_name: str, blob_name: str) -> None:
         """
@@ -66,9 +61,6 @@ class GCPPipelineUtils:
             local_path: file path of the dir to be uploaded
             bucket_name: name of GCP bucket
             blob_name: desired name of dir in GCP
-        
-        Returns:
-            None
         """
         bucket = self.storage_client.get_bucket(bucket_name)
         relative_paths = glob.glob(local_path + '/**', recursive=True)
@@ -87,6 +79,25 @@ class GCPPipelineUtils:
         """
         shutil.rmtree(filepath)
 
+class Logger():
+    def __init__(self):
+        """
+        Instantiation for logger class
+        """
+        self.start_time = timeit.default_timer()
+        self.first_time = timeit.default_timer()
+
+    def time(self, task_name):
+        """
+        Prints the time taken since last time log
+
+        Args:
+            task_name: a task name for the log
+        """
+        end_time = timeit.default_timer()
+        elapsed_time = end_time - self.start_time
+        logging.info(f'{task_name} in {elapsed_time:.2f} seconds\n')
+        self.start_time = end_time
 
 class NWPPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
@@ -94,7 +105,7 @@ class NWPPipeline(GCPPipelineUtils):
 
     def download(self, filepath: str) -> Optional[str]:
         """
-        Downloads data from "filepath" location from HuggingFace and 
+        Downloads data from filepath location from HuggingFace and 
         returns the location of the downloaded data. If the filepath 
         is not found, it logs the error in a log file.
 
@@ -174,7 +185,7 @@ class NWPPipeline(GCPPipelineUtils):
 
         Args:
             dataset: an Xarray dataset
-            lon_range: a tuple of min and max times
+            time_range: a tuple of min and max times
 
         Returns:
             An Xarray dataset with cropped time
@@ -212,8 +223,6 @@ class NWPPipeline(GCPPipelineUtils):
         Returns:
             A pandas dataframe with timeseries and metadata preprocessed and joined
         """
-        import ipdb; ipdb.set_trace()
-
         pv_timeseries: pd.DataFrame = pd.read_csv(pv_timeseries_path)
         pv_metadata: pd.DataFrame = pd.read_csv(pv_metadata_path)
 
@@ -243,9 +252,7 @@ class NWPPipeline(GCPPipelineUtils):
             nwp_dataset: an Xarray NWP dataset
             pv_data: a Pandas PV dataset
         """
-        import ipdb; ipdb.set_trace()
-
-        start_time, end_time = nwp_dataset['time'][-1].values, nwp_dataset['time'][0].values
+        start_time, end_time = nwp_dataset['time'][0].values, nwp_dataset['time'][-1].values
         pv_data = pv_data[
             (pv_data['time'] >= start_time) &
             (pv_data['time'] <= end_time)
@@ -284,74 +291,75 @@ class NWPPipeline(GCPPipelineUtils):
         START_DATE: date = self.format_date(self.config['start_date'])
         END_DATE: date = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
-
         import ipdb; ipdb.set_trace()
-
+        logger = Logger()
         if self.config['pv_join']['is_join_pv']:
-            logging.info('\nLoading static PV resources')
-            pv_timeseries, pv_metadata = self.load_pv_resources(
+            logging.info('Loading static PV resources')
+            pv_data = self.load_pv_resources(
                 pv_timeseries_path=self.config['pv_join']['pv_timeseries_path'],
                 pv_metadata_path=self.config['pv_join']['pv_metadata_path']
             )
+            logger.time(task_name='Loaded PV resources')
 
         cur_date = START_DATE
         while cur_date <= END_DATE:
             # download file
-            logging.info(f'\nDownloading: {cur_date}')
+            logging.info(f'[{cur_date}] Downloading')
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
                 .replace('DATE', str(cur_date.strftime('%Y%m%d')))
             download_path: Optional[str] = self.download(huggingface_path)
-
             file_path = download_path[-25:-4]
 
             if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
                 continue
 
+            logger.time(task_name=f'[{cur_date}] Downloaded')
+
             # unzip file
-            logging.info(f'\nUnzipping: {cur_date}')
+            logging.info(f'[{cur_date}] Unzipping')
             unzipped_path = UNZIPPED_PATH_PREFIX + file_path
             self.unzip(download_path, unzipped_path)
+            logger.time(task_name=f'[{cur_date}] Unzipped')
 
             # preprocess NWP data
-            logging.info(f'\nPreprocessing: {cur_date}')
+            logging.info(f'[{cur_date}] Preprocessing')
             preprocessed_path = PREPROCESSED_PATH_PREFIX + file_path
             nwp_data: xr.Dataset = xr.open_dataset(unzipped_path, engine='zarr', chunks='auto')
             nwp_data = self.preprocess_nwp(nwp_data=nwp_data)
             nwp_data.to_zarr(preprocessed_path)
+            logger.time(task_name=f'[{cur_date}] Preprocessed')
         
             # upload preprocessed NWP to GCP
-            logging.info(f'\nUploading: {cur_date}')
+            logging.info(f'[{cur_date}] Uploading')
             self.gcp_upload_dir(
                 local_path=preprocessed_path,
                 bucket_name=self.config['gcp_bucket'],
                 blob_name=self.config['gcp_dest_blob'] + file_path
             )
+            logger.time(task_name=f'[{cur_date}] Uploaded')
 
             # left join PV with NWP and upload
-            import ipdb; ipdb.set_trace()
             if self.config['pv_join']['is_join_pv']:
-                logging.info(f'\nJoining PV with NWP: {cur_date}')
-                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(
-                    nwp_dataset=nwp_data,
-                    pv_timeseries=pv_timeseries,
-                    pv_metadata=pv_metadata
-                )
+                logging.info(f'[{cur_date}] Joining PV')
+                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(nwp_dataset=nwp_data,pv_data=pv_data)
+                os.mkdir(JOINED_PATH_PREFIX)
                 joined_path = JOINED_PATH_PREFIX + 'nwp_pv_joined.csv'
                 nwp_pv_joined.to_csv(joined_path)
-                logging.info(f'\nUploading Joined: {cur_date}')
-                self.gcp_upload_dir(
+                logger.time(task_name=f'[{cur_date}] Joined PV')
+
+                logging.info(f'[{cur_date}] Uploading Joined PV')
+                self.gcp_upload_file(
                     local_path=joined_path,
                     bucket_name=self.config['gcp_bucket'],
-                    blob_name=self.config['pv_join']['joined_dest_blob'] + file_path
+                    blob_name=self.config['pv_join']['gcp_joined_dest_blob'] + cur_date.strftime('%Y/%m/%Y%m%d') + '_pv_joined.csv'
                 )
-            
-            logging.info(f'\nClearing: {cur_date}')
+                logger.time(task_name=f'[{cur_date}] Uploaded Joined PV')
+
+            logging.info(f'[{cur_date}] Clearing Resources')
             self.teardown('./cache')
             cur_date += timedelta(days=1)
-        
-        return None
 
 
 class PVPipeline(GCPPipelineUtils):
@@ -380,7 +388,7 @@ class PVPipeline(GCPPipelineUtils):
             # CHECK IF THIS CASE NEEDS TO BE DIFFERENCED
 
         else:
-            logging.warning(f'\n{key} does not contain the necessary columns for power generation')
+            logging.warning(f'{key} does not contain the necessary columns for power generation')
 
         df['system_id'] = key.split('/')[-1]
         df['timestamp'] = df.index
@@ -397,12 +405,12 @@ class PVPipeline(GCPPipelineUtils):
         return df
 
     def execute(self) -> None:
-        assert self.config['data_type'] == 'pv', 'Configuration Error: Expects "pv" data_type in configuration'
+        assert self.config['data_type'] == 'pv', "Configuration Error: Expects 'pv' data_type in configuration"
         filepath = self.config['file_path']
         hdf_path = None
 
         if not os.path.exists(filepath):
-            logging.critical('\nDirectory does not exist at specified filepath')
+            logging.critical('Directory does not exist at specified filepath')
 
         for file in os.listdir(filepath):
 
@@ -418,7 +426,7 @@ class PVPipeline(GCPPipelineUtils):
                 )
 
         if not hdf_path:
-            logging.critical('\nHDF5 file does not exist within the specified directory')
+            logging.critical('HDF5 file does not exist within the specified directory')
 
         with pd.HDFStore(hdf_path) as hdf:
             keys = hdf.keys()
@@ -445,7 +453,7 @@ class PVPipeline(GCPPipelineUtils):
         # preprocessing and aggregating site-level data
         sites = []
         for i, key in enumerate(keys[2:]):
-            logging.info(f'\nProcessing Key #{i}: {key}')
+            logging.info(f'Processing Key #{i}: {key}')
             site_df = pd.read_hdf(hdf_path, key)
             site_df = self.preprocess(key, site_df)
             sites.append(site_df)

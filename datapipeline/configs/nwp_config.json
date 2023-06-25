@@ -4,7 +4,7 @@
     "hf_repo_type":"dataset",
     "hf_token":"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",
     "start_date":"01-01-2022",
-    "end_date":"01-01-2022",
+    "end_date":"06-01-2022",
     "interval":1,
     "features":[],
     "error_log_path":"./error_logs",
