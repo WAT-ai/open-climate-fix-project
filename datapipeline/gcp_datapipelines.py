@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import zipfile
+import cftime
 import timeit
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple, List
@@ -86,7 +87,7 @@ class Logger():
         self.start_time = timeit.default_timer()
         self.first_time = timeit.default_timer()
 
-    def time(self, task_name):
+    def time(self, task_name: str, lifetime_call: bool=False):
         """
         Prints the time taken since last time log
 
@@ -94,9 +95,12 @@ class Logger():
             task_name: a task name for the log
         """
         end_time = timeit.default_timer()
-        elapsed_time = end_time - self.start_time
+        if lifetime_call:
+            elapsed_time = end_time - self.first_time
+        else:
+            elapsed_time = end_time - self.start_time
+            self.start_time = end_time
         logging.info(f'{task_name} in {elapsed_time:.2f} seconds\n')
-        self.start_time = end_time
 
 class NWPPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
@@ -140,6 +144,7 @@ class NWPPipeline(GCPPipelineUtils):
         Args:
             nwp_data: the NWP xarray dataset to be preprocessed
         """
+        import ipdb; ipdb.set_trace()
         nwp_data = self.drop_dataset_features(
             dataset=nwp_data, features=self.config['preprocess']['features']
         )
@@ -152,6 +157,8 @@ class NWPPipeline(GCPPipelineUtils):
             dataset=nwp_data,
             time_range=self.config['preprocess']['time_range']
         )
+        if isinstance(nwp_data['time'].values[0], cftime.DatetimeGregorian):
+            nwp_data['time'] = nwp_data.indexes['time'].to_datetimeindex()
         return nwp_data
 
     def crop_dataset_region(
@@ -241,23 +248,24 @@ class NWPPipeline(GCPPipelineUtils):
 
     def join_nwp_pv(
             self,
-            nwp_dataset: xr.Dataset,
+            nwp_data: xr.Dataset,
             pv_data: pd.DataFrame
         ) -> pd.DataFrame:
         """
         Accepts PV datasets along with NWP data and joins them together
 
         Args:
-            nwp_dataset: an Xarray NWP dataset
+            nwp_data: an Xarray NWP dataset
             pv_data: a Pandas PV dataset
         """
-        start_time, end_time = nwp_dataset['time'][0].values, nwp_dataset['time'][-1].values
+        start_time, end_time = nwp_data['time'][0].values, nwp_data['time'][-1].values
+        
         pv_data = pv_data[
             (pv_data['time'] >= start_time) &
             (pv_data['time'] <= end_time)
         ].sort_values(by='time', ignore_index=True)
         
-        nwp_df: pd.DataFrame = nwp_dataset.to_dataframe().reset_index()
+        nwp_df: pd.DataFrame = nwp_data.to_dataframe().reset_index()
 
         nwp_pv_data: pd.DataFrame = pv_data.merge(
                 nwp_df,
@@ -323,7 +331,7 @@ class NWPPipeline(GCPPipelineUtils):
             logger.time(task_name=f'[{cur_date}] Unzipped')
 
             # preprocess NWP data
-            logging.info(f'[{cur_date}] Preprocessing')
+            logging.info(f'[{cur_date}] Preprocessing NWP')
             preprocessed_path = PREPROCESSED_PATH_PREFIX + file_path
             nwp_data: xr.Dataset = xr.open_dataset(unzipped_path, engine='zarr', chunks='auto')
             nwp_data = self.preprocess_nwp(nwp_data=nwp_data)
@@ -331,18 +339,18 @@ class NWPPipeline(GCPPipelineUtils):
             logger.time(task_name=f'[{cur_date}] Preprocessed')
         
             # upload preprocessed NWP to GCP
-            logging.info(f'[{cur_date}] Uploading')
+            logging.info(f'[{cur_date}] Uploading NWP')
             self.gcp_upload_dir(
                 local_path=preprocessed_path,
                 bucket_name=self.config['gcp_bucket'],
                 blob_name=self.config['gcp_dest_blob'] + file_path
             )
-            logger.time(task_name=f'[{cur_date}] Uploaded')
+            logger.time(task_name=f'[{cur_date}] Uploaded NWP')
 
             # left join PV with NWP and upload
             if self.config['pv_join']['is_join_pv']:
                 logging.info(f'[{cur_date}] Joining PV')
-                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(nwp_dataset=nwp_data,pv_data=pv_data)
+                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(nwp_data=nwp_data,pv_data=pv_data)
                 os.mkdir(JOINED_PATH_PREFIX)
                 joined_path = JOINED_PATH_PREFIX + 'nwp_pv_joined.csv'
                 nwp_pv_joined.to_csv(joined_path)
@@ -356,9 +364,11 @@ class NWPPipeline(GCPPipelineUtils):
                 )
                 logger.time(task_name=f'[{cur_date}] Uploaded Joined PV')
 
-            logging.info(f'[{cur_date}] Clearing Resources')
+            logging.info(f'[{cur_date}] Clearing Resources\n')
             self.teardown('./cache')
             cur_date += timedelta(days=1)
+
+        logger.time(task_name='Pipeline ran')
 
 
 class PVPipeline(GCPPipelineUtils):
@@ -478,5 +488,7 @@ class PVPipeline(GCPPipelineUtils):
 
 if __name__ == '__main__':
     config_path = './configs/nwp_config.json'
-    datapipeline = NWPPipeline(config_path)
-    datapipeline.execute()
+    nwp_pipeline = NWPPipeline(config=config_path)
+    nwp_pipeline.execute()
+    #nwp_data = xr.open_dataset(filename_or_obj="cache/unzipped/2022/01/20220104.zarr", engine='zarr', chunks='auto')
+    #import ipdb; ipdb.set_trace()

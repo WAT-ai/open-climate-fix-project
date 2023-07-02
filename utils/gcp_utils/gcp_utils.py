@@ -42,7 +42,7 @@ class GCPUtils:
         end_date =  datetime.strptime(config['end_date'], '%d/%m/%Y')
         current_date = start_date
         while current_date <= end_date:
-            remote_path = f"gs://ocf_base_data/nwp/surface/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
+            remote_path = f"gs://ocf_base_data/nwp/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
             self.download_dir(remote_path, config['destination_path'])
             current_date += timedelta(1)
 
