@@ -2,6 +2,9 @@
 data/
 cache/
 error_logs.txt
+pvdata/
+nwpdata/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

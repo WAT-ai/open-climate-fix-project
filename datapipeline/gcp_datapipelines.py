@@ -1,86 +1,74 @@
+import glob
 import json
 import logging
 import os
-import pandas as pd
-import zipfile
 import shutil
-import xarray as xr
+import zipfile
+import cftime
+import timeit
+from datetime import date, datetime, timedelta
+from typing import Optional, Tuple, List
 
+import pandas as pd
+import xarray as xr
 from google.cloud import storage
 from huggingface_hub import hf_hub_download
-from datetime import date, datetime, timedelta
+from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 
-class GCPPipeline:
+class GCPPipelineUtils:
     def __init__(self, config: str) -> None:
         """
-        Intialization function for pipeline. Expects a path to JSON configuration file.
+        Intialization function for pipeline utils. Expects a path to JSON configuration file.
 
         Args:
             config: path to JSON config object
         """
-        self.config = json.load(open(config))
+        self.config: dict  = json.load(open(config))
+        self.storage_client = storage.Client()
 
-    def unzip(self, source: str, dest: str) -> None:
+    def unzip(self, zipped_path: str,  dest_path: str) -> None:
         """
-        Unzips all files from the source dir and extracts them to the dest dir
+        Unzips all the files from the zipped file at zipped_path
+        and extracts them to the dest dir at dest_path
 
         Args:
-            source: source file path
-            dest: destination file path
-        
-        Returns:
-            None
+            zipped_path: file path to the zipped file
+            dest_path: file path to the destination
         """
-        logging.info(f'\nUnzipping: {source}')
-        logging.info(f'\nExtracting to: {dest}')
-        with zipfile.ZipFile(source, 'r') as zip_ref:
-            zip_ref.extractall(dest)
+        with zipfile.ZipFile(zipped_path, 'r') as zip_ref:
+            zip_ref.extractall(dest_path)
 
-    def gcp_upload_file(self, source: str, bucket_name: str, blob_name: str) -> None:
+    def gcp_upload_file(self, local_path: str, bucket_name: str, blob_name: str) -> None:
         """
-        Uploads the source file to the GCP bucket specified in the configuration
-        Used by the gcp_upload_dir method
+        Uploads the local source file to the specified GCP bucket
 
         Args:
-            source: file path of source file
+            local_path: file path of the file to be uploaded
             bucket_name: name of GCP bucket
             blob_name: desired name of file in GCP
-        
-        Returns:
-            None
         """
-        logging.info(f'\nUploading {source} to {blob_name}.')
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
+        bucket = self.storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
-        blob.upload_from_filename(source)
-        logging.info(f'\nFile {source} succesfully uploaded to {blob_name}.')
-        return None
+        blob.upload_from_filename(local_path)
 
-    def gcp_upload_dir(self, source: str, bucket_name: str, blob_name: str):
+    def gcp_upload_dir(self, local_path: str, bucket_name: str, blob_name: str) -> None:
         """
-        Uploads the source dir to the GCP bucket specified in the configuration
+        Uploads all the content of a local source dir to the specified GCP bucket dir
 
         Args:
-            source: file path of source dir
+            local_path: file path of the dir to be uploaded
             bucket_name: name of GCP bucket
-            blob_name: desired name of file in GCP
-        
-        Returns:
-            None
+            blob_name: desired name of dir in GCP
         """
-        logging.info(f'\nUploading {source} to {blob_name}.')
-        storage_client = storage.Client()
-        bucket = storage_client.get_bucket(bucket_name)
-        for path, subdirs, files in os.walk(source):
-            for name in files:
-                path_local = os.path.join(path, name)
-                blob_path = path_local.replace('\\','/')
-                remote_path = f'{blob_name}/{"/".join(blob_path.split(os.sep)[1:])}{blob_path.replace(source, "")[1:]}'
+        bucket = self.storage_client.get_bucket(bucket_name)
+        relative_paths = glob.glob(local_path + '/**', recursive=True)
+        for local_file in tqdm(relative_paths):
+            remote_path = blob_name + local_file[len(local_path):]
+            if os.path.isfile(local_file):
                 blob = bucket.blob(remote_path)
-                blob.upload_from_filename(path_local)
+                blob.upload_from_filename(local_file)
 
     def teardown(self, filepath: str) -> None:
         """
@@ -89,17 +77,38 @@ class GCPPipeline:
         Args:
             filepath: location of directory to delete
         """
-        logging.info(f'\nDeleting: {filepath}')
         shutil.rmtree(filepath)
 
+class Logger():
+    def __init__(self):
+        """
+        Instantiation for logger class
+        """
+        self.start_time = timeit.default_timer()
+        self.first_time = timeit.default_timer()
 
-class NWPPipeline(GCPPipeline):
+    def time(self, task_name: str, lifetime_call: bool=False):
+        """
+        Prints the time taken since last time log
+
+        Args:
+            task_name: a task name for the log
+        """
+        end_time = timeit.default_timer()
+        if lifetime_call:
+            elapsed_time = end_time - self.first_time
+        else:
+            elapsed_time = end_time - self.start_time
+            self.start_time = end_time
+        logging.info(f'{task_name} in {elapsed_time:.2f} seconds\n')
+
+class NWPPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
-    def download(self, filepath: str) -> str:
+    def download(self, filepath: str) -> Optional[str]:
         """
-        Downloads data from "filepath" location from HuggingFace and 
+        Downloads data from filepath location from HuggingFace and 
         returns the location of the downloaded data. If the filepath 
         is not found, it logs the error in a log file.
 
@@ -109,7 +118,6 @@ class NWPPipeline(GCPPipeline):
         Returns:
             returns filepath of downloaded data
         """
-        logging.info(f'\nDownloading: {filepath}...')
         try:
             download_path = hf_hub_download(
                 repo_id=self.config['hf_repo_id'],
@@ -125,30 +133,146 @@ class NWPPipeline(GCPPipeline):
             log_file.write(str(error_log))
             return error
 
-    def preprocess(self, filepath: str, to_path: str) -> None:
+    def preprocess_nwp(self, nwp_data: xr.Dataset) -> xr.Dataset:
         """
-        Preprocesses the zarr file at filepath according to configuration parameters
+        Preprocesses and returns NWP Dataset according to configuration parameters
 
-        Selecting time slice (6 AM to 9 PM)
-        Dropping features
-        Selecting a region (longitudinal latitudinal coords)
+        - Drop features
+        - Crop time axis
+        - Crop a region (longitudinal latitudinal coordinates)
 
         Args:
-            filepath: location of zarr path
+            nwp_data: the NWP xarray dataset to be preprocessed
         """
-        logging.info(f'\nPreprocessing {filepath} and saving to {to_path}.')
-        max_lat, min_lat = self.config['preprocess']['latitude']
-        min_lon, max_lon = self.config['preprocess']['longitude']
-        min_time, max_time = self.config['preprocess']['time_range']
+        import ipdb; ipdb.set_trace()
+        nwp_data = self.drop_dataset_features(
+            dataset=nwp_data, features=self.config['preprocess']['features']
+        )
+        nwp_data = self.crop_dataset_region(
+            dataset=nwp_data,
+            lat_range=self.config['preprocess']['latitude'],
+            lon_range=self.config['preprocess']['longitude']
+        )
+        nwp_data = self.crop_dataset_time(
+            dataset=nwp_data,
+            time_range=self.config['preprocess']['time_range']
+        )
+        if isinstance(nwp_data['time'].values[0], cftime.DatetimeGregorian):
+            nwp_data['time'] = nwp_data.indexes['time'].to_datetimeindex()
+        return nwp_data
 
-        dataset = xr.open_dataset(filepath, engine='zarr', chunks='auto')
-        dataset = dataset[self.config['preprocess']['features']]
-        dataset = dataset.sel(latitude=slice(min_lat, max_lat),
-                              longitude=slice(min_lon, max_lon),
-                              time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)]))
+    def crop_dataset_region(
+            self,
+            dataset: xr.Dataset,
+            lat_range: Tuple[int, int],
+            lon_range: Tuple[int, int]
+        ) -> xr.Dataset:
+        """
+        Takes an Xarray dataset and returns a new dataset cropped within the given region
 
-        dataset.to_zarr(to_path)
-        del dataset
+        Args:
+            dataset: an Xarray dataset
+            lat_range: a tuple of min and max latitudinal
+            lon_range: a tuple of min and max longitudinal
+
+        Returns:
+            An Xarray dataset with cropped region
+        """
+        max_lat, min_lat = lat_range
+        min_lon, max_lon = lon_range
+        return dataset.sel(
+            latitude=slice(min_lat, max_lat),
+            longitude=slice(min_lon, max_lon)
+        )
+   
+    def crop_dataset_time(self, dataset: xr.Dataset, time_range: Tuple[int, int]) -> xr.Dataset:
+        """
+        Takes an Xarray dataset and returns a new dataset cropped within the given time range
+
+        Args:
+            dataset: an Xarray dataset
+            time_range: a tuple of min and max times
+
+        Returns:
+            An Xarray dataset with cropped time
+        """
+        min_time, max_time = time_range
+        return dataset.sel(
+            time=slice(dataset['time'][int(min_time)], dataset['time'][int(max_time)])
+        )
+    
+    def drop_dataset_features(self, dataset: xr.Dataset, features: list[str]) -> xr.Dataset:
+        """
+        Takes an Xarray dataset and returns a new dataset with only the given features
+
+        Args:
+            dataset: an Xarray dataset
+            features: list of features (must be valid features of dataset)
+
+        Returns:
+            An Xarray dataset with features dropped
+        """
+        return dataset[features]
+    
+    def load_pv_resources(
+            self,
+            pv_timeseries_path: str,
+            pv_metadata_path: str
+        ) -> pd.DataFrame:
+        """
+        Loads the PV metadata and timeseries data, preprocesses, joins and returns them
+
+        Args:
+            pv_timeseries_path: path to PV timeseries data
+            pv_metadata_path: path to PV metadata
+        
+        Returns:
+            A pandas dataframe with timeseries and metadata preprocessed and joined
+        """
+        pv_timeseries: pd.DataFrame = pd.read_csv(pv_timeseries_path)
+        pv_metadata: pd.DataFrame = pd.read_csv(pv_metadata_path)
+
+        pv_timeseries['timestamp'] = pd.to_datetime(pv_timeseries['timestamp'])
+        pv_timeseries = pv_timeseries.rename(columns={'timestamp':'time'})
+
+        pv_metadata = pv_metadata[['system_id', 'latitude', 'longitude']]
+        pv_metadata['latitude'] = round(pv_metadata['latitude'] * 4) / 4
+        pv_metadata['longitude'] = round(pv_metadata['longitude'] * 4) / 4
+
+        pv_joined = pv_timeseries.merge(
+            pv_metadata[['system_id', 'latitude', 'longitude']],
+            how='left',
+            on='system_id'
+        )
+        return pv_joined
+
+    def join_nwp_pv(
+            self,
+            nwp_data: xr.Dataset,
+            pv_data: pd.DataFrame
+        ) -> pd.DataFrame:
+        """
+        Accepts PV datasets along with NWP data and joins them together
+
+        Args:
+            nwp_data: an Xarray NWP dataset
+            pv_data: a Pandas PV dataset
+        """
+        start_time, end_time = nwp_data['time'][0].values, nwp_data['time'][-1].values
+        
+        pv_data = pv_data[
+            (pv_data['time'] >= start_time) &
+            (pv_data['time'] <= end_time)
+        ].sort_values(by='time', ignore_index=True)
+        
+        nwp_df: pd.DataFrame = nwp_data.to_dataframe().reset_index()
+
+        nwp_pv_data: pd.DataFrame = pv_data.merge(
+                nwp_df,
+                how='left',
+                on=['time', 'latitude', 'longitude']
+            )
+        return nwp_pv_data
 
     def format_date(self, date_str: str) -> date:
         """
@@ -166,49 +290,88 @@ class NWPPipeline(GCPPipeline):
         """
         Runs the NWP pipeline according to the configuration file
         """
-        assert self.config['data_type'] == 'nwp', 'Configuration Error: Expects "nwp" data_type in configuration'
+        TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
+        UNZIPPED_PATH_PREFIX = './cache/unzipped/'
+        PREPROCESSED_PATH_PREFIX = './cache/preprocessed/'
+        JOINED_PATH_PREFIX = './cache/joined/'
 
-        START_DATE = self.format_date(self.config['start_date'])
-        END_DATE = self.format_date(self.config['end_date'])
+        START_DATE: date = self.format_date(self.config['start_date'])
+        END_DATE: date = self.format_date(self.config['end_date'])
         assert START_DATE <= END_DATE, 'Configuration Error: start date must <= end date'
 
-        TEMPLATE_PATH = f"data/surface/{'YEAR'}/{'MONTH'}/{'DATE'}.zarr.zip"
+        logger = Logger()
+        if self.config['pv_join']['is_join_pv']:
+            logging.info('Loading static PV resources')
+            pv_data = self.load_pv_resources(
+                pv_timeseries_path=self.config['pv_join']['pv_timeseries_path'],
+                pv_metadata_path=self.config['pv_join']['pv_metadata_path']
+            )
+            logger.time(task_name='Loaded PV resources')
 
         cur_date = START_DATE
         while cur_date <= END_DATE:
-
             # download file
+            logging.info(f'[{cur_date}] Downloading')
             huggingface_path = TEMPLATE_PATH.replace('YEAR', str(cur_date.year)) \
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
                 .replace('DATE', str(cur_date.strftime('%Y%m%d')))
-            download_path = self.download(huggingface_path)
+            download_path: Optional[str] = self.download(huggingface_path)
+            file_path = download_path[-25:-4]
 
             if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
                 continue
 
+            logger.time(task_name=f'[{cur_date}] Downloaded')
+
             # unzip file
-            unzipped_path = './cache/unzipped/' + download_path[-25:-4]
+            logging.info(f'[{cur_date}] Unzipping')
+            unzipped_path = UNZIPPED_PATH_PREFIX + file_path
             self.unzip(download_path, unzipped_path)
+            logger.time(task_name=f'[{cur_date}] Unzipped')
 
-            # preprocess data
-            processed_path = './cache/preprocessed/' + download_path[-25:-4]
-            self.preprocess(unzipped_path, processed_path)
-
-            # upload to GCP
-            blob_file_name = huggingface_path[5:-4]
+            # preprocess NWP data
+            logging.info(f'[{cur_date}] Preprocessing NWP')
+            preprocessed_path = PREPROCESSED_PATH_PREFIX + file_path
+            nwp_data: xr.Dataset = xr.open_dataset(unzipped_path, engine='zarr', chunks='auto')
+            nwp_data = self.preprocess_nwp(nwp_data=nwp_data)
+            nwp_data.to_zarr(preprocessed_path)
+            logger.time(task_name=f'[{cur_date}] Preprocessed')
+        
+            # upload preprocessed NWP to GCP
+            logging.info(f'[{cur_date}] Uploading NWP')
             self.gcp_upload_dir(
-                source=processed_path,
+                local_path=preprocessed_path,
                 bucket_name=self.config['gcp_bucket'],
-                blob_name=self.config['gcp_dest_blob'] + blob_file_name
+                blob_name=self.config['gcp_dest_blob'] + file_path
             )
-            self.teardown('cache')
+            logger.time(task_name=f'[{cur_date}] Uploaded NWP')
 
-            # increment date
+            # left join PV with NWP and upload
+            if self.config['pv_join']['is_join_pv']:
+                logging.info(f'[{cur_date}] Joining PV')
+                nwp_pv_joined: pd.DataFrame = self.join_nwp_pv(nwp_data=nwp_data,pv_data=pv_data)
+                os.mkdir(JOINED_PATH_PREFIX)
+                joined_path = JOINED_PATH_PREFIX + 'nwp_pv_joined.csv'
+                nwp_pv_joined.to_csv(joined_path)
+                logger.time(task_name=f'[{cur_date}] Joined PV')
+
+                logging.info(f'[{cur_date}] Uploading Joined PV')
+                self.gcp_upload_file(
+                    local_path=joined_path,
+                    bucket_name=self.config['gcp_bucket'],
+                    blob_name=self.config['pv_join']['gcp_joined_dest_blob'] + cur_date.strftime('%Y/%m/%Y%m%d') + '_pv_joined.csv'
+                )
+                logger.time(task_name=f'[{cur_date}] Uploaded Joined PV')
+
+            logging.info(f'[{cur_date}] Clearing Resources\n')
+            self.teardown('./cache')
             cur_date += timedelta(days=1)
 
+        logger.time(task_name='Pipeline ran')
 
-class PVPipeline(GCPPipeline):
+
+class PVPipeline(GCPPipelineUtils):
     def __init__(self, config: str) -> None:
         super().__init__(config)
 
@@ -234,7 +397,7 @@ class PVPipeline(GCPPipeline):
             # CHECK IF THIS CASE NEEDS TO BE DIFFERENCED
 
         else:
-            logging.warning(f'\n{key} does not contain the necessary columns for power generation')
+            logging.warning(f'{key} does not contain the necessary columns for power generation')
 
         df['system_id'] = key.split('/')[-1]
         df['timestamp'] = df.index
@@ -251,12 +414,12 @@ class PVPipeline(GCPPipeline):
         return df
 
     def execute(self) -> None:
-        assert self.config['data_type'] == 'pv', 'Configuration Error: Expects "pv" data_type in configuration'
+        assert self.config['data_type'] == 'pv', "Configuration Error: Expects 'pv' data_type in configuration"
         filepath = self.config['file_path']
         hdf_path = None
 
         if not os.path.exists(filepath):
-            logging.critical('\nDirectory does not exist at specified filepath')
+            logging.critical('Directory does not exist at specified filepath')
 
         for file in os.listdir(filepath):
 
@@ -266,13 +429,13 @@ class PVPipeline(GCPPipeline):
             # metadata is uploaded directly to GCP
             elif file.endswith('.csv'):
                 self.gcp_upload_file(
-                    source=filepath + '/' + file, 
+                    local_path=filepath + '/' + file, 
                     bucket_name=self.config['gcp_bucket'],
                     blob_name=self.config['gcp_dest_blob'] + file
                 )
 
         if not hdf_path:
-            logging.critical('\nHDF5 file does not exist within the specified directory')
+            logging.critical('HDF5 file does not exist within the specified directory')
 
         with pd.HDFStore(hdf_path) as hdf:
             keys = hdf.keys()
@@ -286,12 +449,12 @@ class PVPipeline(GCPPipeline):
         pd.read_hdf(hdf_path, keys[0]).to_csv(tmpdir + '/pv_stats.csv')
         pd.read_hdf(hdf_path, keys[1]).to_csv(tmpdir + '/pv_missing.csv')
         self.gcp_upload_file(
-            source=tmpdir + '/pv_stats.csv',
+            local_path=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_stats.csv'
         )
         self.gcp_upload_file(
-            source=tmpdir + '/pv_stats.csv',
+            local_path=tmpdir + '/pv_stats.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_missing.csv'
         )
@@ -299,7 +462,7 @@ class PVPipeline(GCPPipeline):
         # preprocessing and aggregating site-level data
         sites = []
         for i, key in enumerate(keys[2:]):
-            logging.info(f'\nProcessing Key #{i}: {key}')
+            logging.info(f'Processing Key #{i}: {key}')
             site_df = pd.read_hdf(hdf_path, key)
             site_df = self.preprocess(key, site_df)
             sites.append(site_df)
@@ -316,7 +479,7 @@ class PVPipeline(GCPPipeline):
         # upload to GCP
         total_df.to_csv(tmpdir + '/pv_time_series.csv')
         self.gcp_upload_file(
-            source=tmpdir + '/pv_time_series.csv',
+            local_path=tmpdir + '/pv_time_series.csv',
             bucket_name=self.config['gcp_bucket'],
             blob_name=self.config['gcp_dest_blob'] + 'pv_time_series.csv'
         )
@@ -324,6 +487,8 @@ class PVPipeline(GCPPipeline):
 
 
 if __name__ == '__main__':
-    config_path = './nwp_config.json'
-    datapipeline = NWPPipeline(config_path)
-    datapipeline.execute()
+    config_path = './configs/nwp_config.json'
+    nwp_pipeline = NWPPipeline(config=config_path)
+    nwp_pipeline.execute()
+    #nwp_data = xr.open_dataset(filename_or_obj="cache/unzipped/2022/01/20220104.zarr", engine='zarr', chunks='auto')
+    #import ipdb; ipdb.set_trace()
