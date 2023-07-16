@@ -144,7 +144,6 @@ class NWPPipeline(GCPPipelineUtils):
         Args:
             nwp_data: the NWP xarray dataset to be preprocessed
         """
-        import ipdb; ipdb.set_trace()
         nwp_data = self.drop_dataset_features(
             dataset=nwp_data, features=self.config['preprocess']['features']
         )
@@ -179,7 +178,12 @@ class NWPPipeline(GCPPipelineUtils):
             An Xarray dataset with cropped region
         """
         max_lat, min_lat = lat_range
+        min_lat = min(min_lat, max(dataset.latitude))
+        max_lat = max(max_lat, min(dataset.latitude))
+        
         min_lon, max_lon = lon_range
+        min_lon = max(min_lon, min(dataset.longitude))
+        max_lon = min(max_lon, max(dataset.longitude))
         return dataset.sel(
             latitude=slice(min_lat, max_lat),
             longitude=slice(min_lon, max_lon)
@@ -368,7 +372,7 @@ class NWPPipeline(GCPPipelineUtils):
             self.teardown('./cache')
             cur_date += timedelta(days=1)
 
-        logger.time(task_name='Pipeline ran')
+        logger.time(task_name='Pipeline ran', lifetime_call=True)
 
 
 class PVPipeline(GCPPipelineUtils):
@@ -490,5 +494,3 @@ if __name__ == '__main__':
     config_path = './configs/nwp_config.json'
     nwp_pipeline = NWPPipeline(config=config_path)
     nwp_pipeline.execute()
-    #nwp_data = xr.open_dataset(filename_or_obj="cache/unzipped/2022/01/20220104.zarr", engine='zarr', chunks='auto')
-    #import ipdb; ipdb.set_trace()
