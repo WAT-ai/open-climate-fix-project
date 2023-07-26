@@ -42,7 +42,31 @@ class GCPUtils:
         end_date =  datetime.strptime(config['end_date'], '%d/%m/%Y')
         current_date = start_date
         while current_date <= end_date:
-            remote_path = f"gs://ocf_base_data/nwp/surface/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
+            remote_path = f"gs://ocf_base_data/nwp/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
+            self.download_dir(remote_path, config['destination_path'])
+            current_date += timedelta(1)
+
+    def gcp_download_pv_joined(self, config_path: str) -> None:
+        """
+        Downloads PV joined data as outlined in the config
+        If some date within the given range is not found in the GCP bucket,
+        it will be skipped and a corresponding message will be logged
+
+        Args:
+            config_path: path to JSON config object. It must contain:
+                - destination_path: path to where data will be downloaded
+                - start_date: start_date in dd/mm/yyy
+                - end_date: end_date in dd/mm/yyy
+        """
+        config: dict = json.load(open(config_path))
+        if not os.path.isdir(Path(config['destination_path'])):
+            os.mkdir(Path(config['destination_path']))
+        
+        start_date = datetime.strptime(config['start_date'], '%d/%m/%Y')
+        end_date =  datetime.strptime(config['end_date'], '%d/%m/%Y')
+        current_date = start_date
+        while current_date <= end_date:
+            remote_path = f"gs://ocf_base_data/pv_nwp_joined/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
             self.download_dir(remote_path, config['destination_path'])
             current_date += timedelta(1)
 
