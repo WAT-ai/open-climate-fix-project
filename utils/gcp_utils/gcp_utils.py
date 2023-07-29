@@ -22,14 +22,15 @@ class GCPUtils:
         os.system(f'gsutil -m cp -r {remote_path} {destination_path}')
         print('\n')
 
-    def gcp_download_nwp(self, config_path: str) -> None:
+    def download(self, config_path: str) -> None:
         """
-        Downloads NWP data as outlined in the config
+        Downloads NWP or PV joined data as outlined in the config
         If some date within the given range is not found in the GCP bucket,
         it will be skipped and a corresponding message will be logged
 
         Args:
             config_path: path to JSON config object. It must contain:
+                - type: nwp or pv_nwp_joined data
                 - destination_path: path to where data will be downloaded
                 - start_date: start_date in dd/mm/yyy
                 - end_date: end_date in dd/mm/yyy
@@ -41,13 +42,20 @@ class GCPUtils:
         start_date = datetime.strptime(config['start_date'], '%d/%m/%Y')
         end_date =  datetime.strptime(config['end_date'], '%d/%m/%Y')
         current_date = start_date
+        
         while current_date <= end_date:
-            remote_path = f"gs://ocf_base_data/nwp/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
+            if config['type'] == 'nwp':
+                remote_path = f"gs://ocf_base_data/nwp/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}.zarr"
+            elif config['type'] == 'pv_nwp_joined':
+                remote_path = f"gs://ocf_base_data/pv_nwp_joined/{current_date.year}/{current_date.month:02}/{current_date.year}{current_date.month:02}{current_date.day:02}_pv_nwp_joined.csv"
+            else:
+                logging.info('Config Error: Type must be one of "nwp" or "pv_nwp_joined"')
+                return None
             self.download_dir(remote_path, config['destination_path'])
             current_date += timedelta(1)
-
+        return None
 
 if __name__ == "__main__":
     config_path = './gcp_download_config.json'
     util = GCPUtils()
-    util.gcp_download_nwp(config_path=config_path)
+    util.download(config_path=config_path)
