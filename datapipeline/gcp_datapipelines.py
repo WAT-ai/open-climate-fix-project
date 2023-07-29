@@ -320,12 +320,12 @@ class NWPPipeline(GCPPipelineUtils):
                 .replace('MONTH', str(cur_date.month).zfill(2)) \
                 .replace('DATE', str(cur_date.strftime('%Y%m%d')))
             download_path: Optional[str] = self.download(huggingface_path)
-            file_path = download_path[-25:-4]
 
             if not isinstance(download_path, str):
                 cur_date += timedelta(days=1)
                 continue
 
+            file_path = download_path[-25:-4]
             logger.time(task_name=f'[{cur_date}] Downloaded')
 
             # unzip file
