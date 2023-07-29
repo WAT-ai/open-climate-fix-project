@@ -3,8 +3,9 @@
     "hf_repo_id":"openclimatefix/era5-reanalysis",
     "hf_repo_type":"dataset",
     "hf_token":"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",
-    "start_date":"01-01-2022",
-    "end_date":"01-01-2022",
+    "date_formate":"MM-DD-YYYY",
+    "start_date":"01-22-2022",
+    "end_date":"12-30-2022",
     "interval":1,
     "features":[],
     "error_log_path":"./error_logs",
@@ -23,9 +24,9 @@
         ]
     },
     "pv_join":{
-        "is_join_pv":false,
-        "pv_timeseries_path":"",
-        "pv_metadata_path":"",
-        "joined_dest_blob":""
+        "is_join_pv":true,
+        "pv_timeseries_path":"./data/pv/italy/pv_italy_timeseries.csv",
+        "pv_metadata_path":"./data/pv/italy/pv_italy_metadata.csv",
+        "gcp_joined_dest_blob":"pv_nwp_joined/"
     }
 }
