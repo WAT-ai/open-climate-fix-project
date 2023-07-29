@@ -1,5 +1,6 @@
 {
+    "type":"nwp",
     "start_date":"01/01/2022",
-    "end_date":"01/01/2022",
-    "destination_path":"C:/Users/areel/watai/watai/data/experiment"
+    "end_date":"01/10/2022",
+    "destination_path":"C:/Users/areel/watai/watai/data/experiment/nwp"
 }
