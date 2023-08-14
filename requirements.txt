@@ -5,3 +5,4 @@ wget
 tables
 google-api-python-client
 google-cloud-storage
+optuna
